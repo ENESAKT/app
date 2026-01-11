@@ -231,6 +231,26 @@ class _ChatScreenState extends State<ChatScreen> {
     final content = _messageController.text.trim();
     if (content.isEmpty || _currentUserId == null) return;
 
+    // Önce engelleme kontrolü yap
+    final isBlocked = await _supabaseService.checkIfBlocked(
+      _currentUserId!,
+      widget.friendId,
+    );
+
+    if (isBlocked) {
+      // Engellenmiş kullanıcıya mesaj gönderilemiyor
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Bu kullanıcıyla mesajlaşamazsınız'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+
     // Mesajı gönder
     final success = await _supabaseService.sendMessage(
       senderId: _currentUserId!,

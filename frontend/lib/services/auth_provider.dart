@@ -12,7 +12,9 @@ class AuthProvider with ChangeNotifier {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
-    // serverClientId kaldırıldı - google-services.json'dan otomatik okunacak
+    // ✅ KRİTİK: serverClientId ZORUNLU (google-services.json'daki Web OAuth client)
+    serverClientId:
+        '721048601246-a7ffflvgvq2aqeeliufgn1qhsje5ago0.apps.googleusercontent.com',
   );
 
   app_models.User? _currentUser;
