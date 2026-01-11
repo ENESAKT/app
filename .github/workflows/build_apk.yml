@@ -1,18 +1,26 @@
 name: Build and Release APK
 
 on:
+  # ✅ PUSH TO MAIN - Ana tetikleyici
+  push:
+    branches:
+      - main
+  
+  # ✅ TAG PUSH - Release için
   push:
     tags:
-      - 'v*'  # v1.0.0, v1.0.1 gibi version tag'lerinde tetiklenir
-  workflow_dispatch: # Manuel tetikleme
+      - 'v*'
+  
+  # ✅ MANUAL TRIGGER - Test için
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build and Release APK
+    name: Build APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 Checkout code
+      - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
       - name: ☕ Setup Java 17
@@ -22,7 +30,14 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: 🐦 Setup Flutter
+      - name: 📱 Setup Android SDK 36
+        run: |
+          echo "=== Installing Android SDK 36 ==="
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" || echo "SDK 36 installation attempted"
+          echo "✅ SDK 36 ready"
+
+      - name: 🐦 Setup Flutter (Stable)
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
@@ -31,20 +46,15 @@ jobs:
       - name: 🔐 Configure Supabase Secrets
         working-directory: ./frontend
         run: |
-          # Create dart-defines for compile-time constants
           mkdir -p .dart_tool
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" > .env
           echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
-          
-          # Also inject into main.dart if needed (backup method)
-          echo "ℹ️ Supabase credentials will be injected during build"
-          echo "   URL: ${{ secrets.SUPABASE_URL }}"
-          echo "   Key: ${SUPABASE_ANON_KEY:0:20}..." # Show first 20 chars only
+          echo "✅ Supabase secrets configured"
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
-      - name: 📦 Install dependencies
+      - name: 📦 Get Flutter Dependencies
         working-directory: ./frontend
         run: |
           flutter --version
@@ -54,11 +64,11 @@ jobs:
       - name: 🔍 Verify Build Configuration
         working-directory: ./frontend
         run: |
-          echo "=== Android Build Configuration ==="
-          cat android/app/build.gradle.kts | grep -A 5 "namespace"
-          cat android/app/build.gradle.kts | grep -A 3 "compileSdk"
-          cat android/app/build.gradle.kts | grep -A 3 "JavaVersion"
-          echo "==================================="
+          echo "=== Build Configuration ==="
+          cat android/app/build.gradle.kts | grep "compileSdk"
+          cat android/app/build.gradle.kts | grep "targetSdk"
+          cat android/app/build.gradle.kts | grep "namespace"
+          echo "==========================="
 
       - name: 🔧 Build APK (Release)
         working-directory: ./frontend
@@ -75,23 +85,28 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v3
         with:
-          name: build-logs
+          name: build-failure-logs
           path: |
             frontend/build/**/*.log
             ~/.gradle/daemon/*/daemon-*.out.log
           retention-days: 5
 
-      - name: 📋 Get version info
+      - name: 📦 Upload APK Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-release-apk
+          path: frontend/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+      - name: 📋 Get Version Info
         id: version
         run: |
-          # Tag'den versiyon al (v1.0.1 -> 1.0.1)
           if [ -n "$GITHUB_REF" ] && [[ "$GITHUB_REF" == refs/tags/* ]]; then
             VERSION=${GITHUB_REF#refs/tags/v}
             TAG=${GITHUB_REF#refs/tags/}
           else
-            # Manual dispatch için varsayılan versiyon
-            VERSION="1.0.0-manual"
-            TAG="v1.0.0-manual"
+            VERSION="1.0.0-${GITHUB_SHA:0:7}"
+            TAG="v1.0.0-${GITHUB_SHA:0:7}"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
@@ -112,33 +127,15 @@ jobs:
             **Build:** #${{ github.run_number }}
             
             ### 📥 Kurulum
-            1. Aşağıdaki APK dosyasını indirin
-            2. Telefonunuzda "Bilinmeyen Kaynaklardan Kurulum"u aktifleştirin
-            3. APK'yı açıp kurun
-            
-            ### 🔄 OTA Güncelleme
-            Bu sürüm OTA güncelleme sistemi ile otomatik dağıtılabilir.
-            Supabase'de `app_versions` tablosuna aşağıdaki kaydı ekleyin:
-            
-            ```sql
-            INSERT INTO app_versions (version_number, apk_url, force_update, update_message)
-            VALUES (
-              '${{ steps.version.outputs.version }}',
-              'https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/app-release.apk',
-              false,
-              'Yeni versiyon yayınlandı! Güncellemeyi indirin.'
-            );
-            ```
-            
-            ### 📝 Değişiklikler
-            - Yeni özellikler ve iyileştirmeler
-            - Hata düzeltmeleri
-            - Performans optimizasyonları
+            1. APK dosyasını indirin
+            2. Telefonunuzda "Bilinmeyen Kaynaklardan Kurulum" aktif olmalı
+            3. APK'yı kurun
             
             ### 🔧 Build Info
             - Java: 17 (Temurin)
+            - Android SDK: 36
             - Flutter: Stable Channel
-            - Supabase: Configured via GitHub Secrets
+            - Supabase: Configured
           files: frontend/build/app/outputs/flutter-apk/app-release.apk
           draft: false
           prerelease: false
@@ -148,11 +145,8 @@ jobs:
       - name: ✅ Build Success
         run: |
           echo "════════════════════════════════════════════════════════"
-          echo "✅ APK başarıyla oluşturuldu!"
+          echo "✅ APK Build Successful!"
           echo "════════════════════════════════════════════════════════"
-          echo "📦 APK Location: frontend/build/app/outputs/flutter-apk/app-release.apk"
-          if [ -n "${{ steps.version.outputs.tag }}" ]; then
-            echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.tag }}"
-            echo "📥 APK Download: https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/app-release.apk"
-          fi
+          echo "📦 APK: frontend/build/app/outputs/flutter-apk/app-release.apk"
+          echo "🔗 Workflow: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo "════════════════════════════════════════════════════════"
