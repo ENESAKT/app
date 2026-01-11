@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:r_upgrade/r_upgrade.dart';
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
+import 'dart:io';
 import '../models/update_info.dart';
 import '../services/update_service.dart';
 
@@ -46,20 +49,56 @@ class _UpdateDialogState extends State<UpdateDialog> {
     try {
       print('📥 APK indirme başlıyor: ${widget.updateInfo.apkUrl}');
 
-      // r_upgrade ile APK indir ve kur
-      await RUpgrade.upgrade(
+      // 1. İndirme klasörünü al
+      final Directory? directory = await getExternalStorageDirectory();
+      if (directory == null) {
+        throw Exception('Depolama erişimi başarısız');
+      }
+
+      final String filePath = '${directory.path}/app-update.apk';
+      print('   - İndirme yolu: $filePath');
+
+      // 2. Dio ile APK'yı indir
+      final dio = Dio();
+      await dio.download(
         widget.updateInfo.apkUrl,
-        fileName: 'app-update.apk',
-        installType: RUpgradeInstallType.normal,
-        useDownloadManager: false,
+        filePath,
+        onReceiveProgress: (received, total) {
+          if (total != -1) {
+            final progress = (received / total * 100);
+            setState(() {
+              _downloadProgress = progress;
+              _statusMessage = 'İndiriliyor... ${progress.toStringAsFixed(0)}%';
+            });
+            print('   - İlerleme: ${progress.toStringAsFixed(1)}%');
+          }
+        },
       );
 
-      print('✅ Güncelleme başlatıldı');
+      print('✅ İndirme tamamlandı');
+
+      setState(() {
+        _statusMessage = 'Kurulum başlatılıyor...';
+      });
+
+      // 3. APK dosyasını aç (kurulum ekranını tetikler)
+      final result = await OpenFilex.open(filePath);
+
+      print('📦 Kurulum ekranı açıldı: ${result.message}');
 
       if (mounted) {
-        setState(() {
-          _statusMessage = 'Kurulum başlatılıyor...';
-        });
+        // Başarılı mesajı
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('APK indirildi. Kurulum ekranını takip edin.'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        // Dialog'u kapat
+        Navigator.of(context).pop();
       }
     } catch (e, stackTrace) {
       print('❌ Güncelleme hatası: $e');

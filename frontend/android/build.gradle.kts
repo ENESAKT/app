@@ -22,3 +22,13 @@ subprojects {
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
+
+// Kotlin DSL: Fix namespace for third-party plugins (r_upgrade, etc.)
+subprojects {
+    plugins.withId("com.android.library") {
+        val extension = extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)
+        if (extension != null && extension.namespace == null) {
+            extension.namespace = project.group.toString()
+        }
+    }
+}
