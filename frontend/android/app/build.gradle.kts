@@ -8,8 +8,8 @@ plugins {
 android {
     namespace = "com.friendapp.frontend"
 
-    // ✅ GÜNCELLEME: SDK 35 daha stabil (36 çok yeni olabilir)
-    compileSdk = 35
+    // ✅ GÜNCELLEME: SDK 36 (Plugins require this)
+    compileSdk = 36
 
     // NDK version
     ndkVersion = "27.0.12077973"
@@ -27,7 +27,7 @@ android {
         applicationId = "com.friendapp.frontend"
 
         minSdk = flutter.minSdkVersion
-        targetSdk = 34 
+        targetSdk = 36 
 
         versionCode = 1
         versionName = "1.0"
