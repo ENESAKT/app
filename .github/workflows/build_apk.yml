@@ -1,17 +1,11 @@
 name: Build and Release APK
 
 on:
-  # ✅ PUSH TO MAIN - Ana tetikleyici
   push:
     branches:
       - main
-  
-  # ✅ TAG PUSH - Release için
-  push:
     tags:
       - 'v*'
-  
-  # ✅ MANUAL TRIGGER - Test için
   workflow_dispatch:
 
 jobs:
