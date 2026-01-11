@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/auth_provider.dart';
 import '../services/supabase_service.dart';
+import '../services/update_service.dart';
+import '../widgets/update_dialog.dart';
 import 'chat_screen.dart';
 
 /// Ana Sayfa - Kullanıcı listesi (sohbet için)
@@ -23,6 +25,22 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadUsers();
+    _checkForUpdates(); // OTA güncelleme kontrolü
+  }
+
+  Future<void> _checkForUpdates() async {
+    // Uygulama açıldıktan 2 saniye sonra kontrol et
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (!mounted) return;
+
+    final updateService = UpdateService();
+    final updateInfo = await updateService.checkForUpdate();
+
+    if (updateInfo != null && mounted) {
+      // Güncelleme mevcut - Dialog göster
+      UpdateDialog.show(context, updateInfo);
+    }
   }
 
   Future<void> _loadUsers() async {

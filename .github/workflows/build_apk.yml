@@ -1,14 +1,14 @@
-name: Build Flutter APK
+name: Build and Release APK
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch: # Manuel tetikleme için
+    tags:
+      - 'v*'  # v1.0.0, v1.0.1 gibi version tag'lerinde tetiklenir
+  workflow_dispatch: # Manuel tetikleme
 
 jobs:
   build:
-    name: Build Release APK
+    name: Build and Release APK
     runs-on: ubuntu-latest
 
     steps:
@@ -35,15 +35,59 @@ jobs:
         working-directory: ./frontend
         run: flutter build apk --release --no-tree-shake-icons
 
-      - name: 📤 Upload APK as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release
-          path: frontend/build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 30
-
-      - name: ✅ Build Complete
+      - name: 📋 Get version info
+        id: version
         run: |
-          echo "✅ APK başarıyla oluşturuldu!"
-          echo "📁 Artifact: app-release"
-          echo "📥 GitHub Actions → Artifacts bölümünden indirebilirsiniz"
+          # Tag'den versiyon al (v1.0.1 -> 1.0.1)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "date=$(date +'%Y-%m-%d %H:%M')" >> $GITHUB_OUTPUT
+
+      - name: 🏷️ Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.tag }}
+          body: |
+            ## 🚀 Project-Friend v${{ steps.version.outputs.version }}
+            
+            ### 📱 Uygulama Güncellemesi
+            **Sürüm:** ${{ steps.version.outputs.version }}  
+            **Tarih:** ${{ steps.version.outputs.date }}  
+            **Build:** #${{ github.run_number }}
+            
+            ### 📥 Kurulum
+            1. Aşağıdaki APK dosyasını indirin
+            2. Telefonunuzda "Bilinmeyen Kaynaklardan Kurulum"u aktifleştirin
+            3. APK'yı açıp kurun
+            
+            ### 🔄 OTA Güncelleme
+            Bu sürüm OTA güncelleme sistemi ile otomatik dağıtılabilir.
+            Supabase'de `app_versions` tablosuna aşağıdaki kaydı ekleyin:
+            
+            ```sql
+            INSERT INTO app_versions (version_number, apk_url, force_update, update_message)
+            VALUES (
+              '${{ steps.version.outputs.version }}',
+              'https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/app-release.apk',
+              false,
+              'Yeni versiyon yayınlandı! Güncellemeyi indirin.'
+            );
+            ```
+            
+            ### 📝 Değişiklikler
+            - Yeni özellikler ve iyileştirmeler
+            - Hata düzeltmeleri
+            - Performans optimizasyonları
+          files: frontend/build/app/outputs/flutter-apk/app-release.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: ✅ Build Success
+        run: |
+          echo "✅ APK başarıyla oluşturuldu ve release'e eklendi!"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.tag }}"
+          echo "📥 APK Download: https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/app-release.apk"

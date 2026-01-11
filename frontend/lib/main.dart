@@ -13,6 +13,7 @@ import 'screens/blocked_users_screen.dart';
 import 'screens/registration_screen.dart';
 import 'screens/email_verification_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/friends_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -74,6 +75,7 @@ class MyApp extends StatelessWidget {
           '/register': (context) => const RegistrationScreen(),
           '/home': (context) => const HomeScreen(),
           '/search': (context) => const SearchScreen(),
+          '/friends': (context) => const FriendsScreen(),
           '/conversations': (context) => const ConversationsScreen(),
           '/settings': (context) => const SettingsScreen(),
           '/admin': (context) => const AdminPanelScreen(),
