@@ -65,6 +65,60 @@ class DatabaseSeeder {
     {'first': 'Ela', 'last': 'Taş'},
   ];
 
+  // Örnek bio metinleri (Türkçe ve İngilizce)
+  final List<String> _sampleBios = [
+    '☕ Kahve tutkunu | 📚 Kitap kurdu',
+    '🎸 Müzik aşığı | 🌍 Gezgin ruh',
+    'Software Engineer | Tech Enthusiast 💻',
+    '🎨 Sanat severim | 🎬 Sinema bağımlısı',
+    '🏃 Koşmayı seviyorum | 🧘 Yoga ile huzur buluyorum',
+    '🍕 Pizza aşığı | 🍜 Yemek yapmayı seviyorum',
+    '📸 Fotoğrafçılık hobim | 🌅 Gün batımı avcısı',
+    '🎮 Gamer | 🕹️ Retro oyun koleksiyonum var',
+    '✈️ Seyahat etmeyi seviyorum | 🗺️ 25 ülke gezdim',
+    '🐶 Hayvan dostu | 🐱 Kedilerimle mutluyum',
+    'Marketing Professional | Creative Mind 🎯',
+    '🏋️ Fitness enthusiast | 💪 Güçlü kal!',
+    '🌱 Doğa sever | 🌳 Ağaç dikmeyi seviyorum',
+    '🎭 Tiyatro oyuncusu | 🎪 Sahnede hayat bulurum',
+    '📖 Edebiyat öğretmeni | 📝 Yazmayı seviyorum',
+    'UX Designer | Making things beautiful ✨',
+    '🏊 Yüzme sporcusu | 🌊 Deniz beni çağırıyor',
+    '🎵 Müzisyen | 🎹 Piyano çalıyorum',
+    '🧑‍🍳 Aşçıyım | 🍰 Tatlı yapmayı seviyorum',
+    '🚴 Bisiklet tutkunu | 🏔️ Dağ bisikletçisiyim',
+    'Data Scientist | Numbers tell stories 📊',
+    '🎨 Grafik tasarımcı | 🖌️ Renklere aşığım',
+    '🏀 Basketbol oynuyorum | ⛹️ Takım ruhu önemli',
+    '🧘‍♀️ Yoga instructor | 🕉️ İç huzur rehberi',
+    '🎬 Film yönetmeni | 🎥 Hikaye anlatıcısıyım',
+    'Entrepreneur | Building dreams 🚀',
+    '🌌 Astronomi meraklısı | 🔭 Yıldızları izliyorum',
+    '🎪 Sirk sanatçısı | 🤹 Jonglörlük yapıyorum',
+    '🧑‍🏫 Öğretmen | 📚 Eğitim tutkunu',
+    '🏃‍♀️ Maraton koşucusu | 🏅 42 km aşkı',
+    'Product Manager | Innovation lover 💡',
+    '🧑‍💻 Full-stack developer | ☕ Code & Coffee',
+    '🎺 Caz müzisyeni | 🎷 Saksafon çalıyorum',
+    '🧗 Tırmanma sporcusu | ⛰️ Zirveye ulaşmak güzel',
+    '🐕 Köpek eğitmeni | 🦴 Hayvanları eğitiyorum',
+    'Architect | Designing the future 🏛️',
+    '🌍 Çevre aktivisti | ♻️ Dünyayı kurtarıyorum',
+    '🎨 Ressam | 🖼️ Tuvalimde hayat var',
+    '🏄 Sörf yapıyorum | 🌊 Dalgalarla dans',
+    '🧑‍🔬 Bilim insanı | 🔬 Araştırma tutkunu',
+    'Journalist | Truth seeker 📰',
+    '🎼 Besteci | 🎶 Müzik ruhumu ifade eder',
+    '🏕️ Kamp sever | 🔥 Doğada huzur bulurum',
+    '🧑‍⚕️ Doktor | 💉 İnsanlara yardım ediyorum',
+    '🎯 Hedef odaklı | 💼 Başarı peşinde',
+    'Photographer | Capturing moments 📷',
+    '🍷 Şarap uzmanı | 🍇 Tadım yapmayı seviyorum',
+    '🧘 Meditasyon | 🌸 İçsel huzur arıyorum',
+    '🎪 Stand-up | 😂 Güldürmeyi seviyorum',
+    'Life coach | Empowering others 🌟',
+  ];
+
   // Örnek mesaj içerikleri
   final List<String> _sampleMessages = [
     'Merhaba! Nasılsın?',
@@ -89,6 +143,16 @@ class DatabaseSeeder {
 
   /// ANA SEED FONKSİYONU - Tüm verileri sırayla yazar
   Future<void> seedDatabase() async {
+    await _performSeed();
+  }
+
+  /// ALIAS: syncDatabase() - Kullanıcı isteği için alternatif isim
+  Future<void> syncDatabase() async {
+    await _performSeed();
+  }
+
+  /// İç seed implementasyonu
+  Future<void> _performSeed() async {
     print('\n' + '=' * 60);
     print('🚀 VERİTABANI SEED İŞLEMİ BAŞLIYOR');
     print('=' * 60 + '\n');
@@ -152,7 +216,9 @@ class DatabaseSeeder {
         await firebaseUser.updateDisplayName(displayName);
         await firebaseUser.reload();
 
-        // 2. Supabase'e sync et
+        // 2. Supabase'e sync et (bio ile birlikte)
+        final randomBio = _sampleBios[_random.nextInt(_sampleBios.length)];
+
         await _supabase.syncUserFromFirebase(
           firebaseUid: firebaseUser.uid,
           email: email,
@@ -160,6 +226,12 @@ class DatabaseSeeder {
           displayName: displayName,
           avatarUrl: null,
         );
+
+        // 3. Bio'yu ayrıca güncelle (syncUserFromFirebase bio parametresi almıyor)
+        await _client
+            .from('users')
+            .update({'bio': randomBio})
+            .eq('id', firebaseUser.uid);
 
         _createdUserIds.add(firebaseUser.uid);
         successCount++;
