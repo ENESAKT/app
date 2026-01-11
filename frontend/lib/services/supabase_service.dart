@@ -187,21 +187,33 @@ class SupabaseService {
   }
 
   /// Mesaj gönder
+  /// ⚠️ Engelleme kontrolü yapar - engellenmiş kullanıcılara mesaj gönderilmez
   Future<bool> sendMessage({
     required String senderId,
     required String receiverId,
     required String content,
   }) async {
     try {
+      // 1. ÖNCELİKLE: Engelleme kontrolü yap
+      final isBlocked = await checkIfBlocked(senderId, receiverId);
+
+      if (isBlocked) {
+        print('⚠️ Mesaj gönderilemedi: Kullanıcılar birbirini engellemiş');
+        return false; // Mesaj gönderme engellendi
+      }
+
+      // 2. Engelleme yoksa mesajı gönder
       await client.from('messages').insert({
         'sender_id': senderId,
         'receiver_id': receiverId,
         'content': content,
         'is_read': false,
       });
+
+      print('✅ Mesaj başarıyla gönderildi');
       return true;
     } catch (e) {
-      print('Send message error: $e');
+      print('❌ Send message error: $e');
       return false;
     }
   }
@@ -286,6 +298,40 @@ class SupabaseService {
     } catch (e) {
       print('Get conversations error: $e');
       return [];
+    }
+  }
+
+  /// İki kullanıcı arasında engelleme var mı kontrol et
+  /// Hem gönderen → alıcı hem de alıcı → gönderen yönünde kontrol yapar
+  Future<bool> checkIfBlocked(String userId1, String userId2) async {
+    try {
+      // Her iki yönü de kontrol et
+      final result = await client
+          .from('blocked_users')
+          .select()
+          .or('blocker_id.eq.$userId1,blocker_id.eq.$userId2')
+          .or('blocked_id.eq.$userId1,blocked_id.eq.$userId2');
+
+      if (result.isEmpty) {
+        return false; // Engelleme yok
+      }
+
+      // Aralarında engelleme var mı kontrol et
+      for (var block in result) {
+        final blockerId = block['blocker_id'];
+        final blockedId = block['blocked_id'];
+
+        // userId1 → userId2 veya userId2 → userId1 engellemesi var mı?
+        if ((blockerId == userId1 && blockedId == userId2) ||
+            (blockerId == userId2 && blockedId == userId1)) {
+          return true; // Engelleme mevcut
+        }
+      }
+
+      return false;
+    } catch (e) {
+      print('Check if blocked error: $e');
+      return false; // Hata durumunda engelleme yok kabul et
     }
   }
 
