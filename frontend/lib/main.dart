@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'services/auth_provider.dart';
 import 'services/database_seeder.dart';
+import 'services/version_check_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/search_screen.dart';
@@ -17,6 +18,7 @@ import 'screens/email_verification_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/friends_screen.dart';
 import 'screens/seed_data_screen.dart'; // DEV ONLY
+import 'widgets/version_update_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -135,7 +137,31 @@ class _AuthWrapperState extends State<AuthWrapper> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<AuthProvider>(context, listen: false).checkAuth();
+      _checkForUpdates();
     });
+  }
+
+  /// Uygulama açılışında versiyon kontrolü yap
+  Future<void> _checkForUpdates() async {
+    try {
+      final versionService = VersionCheckService();
+      final updateInfo = await versionService.checkForUpdate();
+
+      if (updateInfo != null && mounted) {
+        // Güncelleme mevcut - kapatılamayan dialog göster
+        showDialog(
+          context: context,
+          barrierDismissible: false, // Dışarıya tıklayarak kapatılamaz
+          builder: (context) => VersionUpdateDialog(
+            newVersion: updateInfo['version']!,
+            downloadUrl: updateInfo['download_url']!,
+          ),
+        );
+      }
+    } catch (e) {
+      print('⚠️ Versiyon kontrolü yapılamadı: $e');
+      // Hata durumunda sessizce devam et
+    }
   }
 
   @override
