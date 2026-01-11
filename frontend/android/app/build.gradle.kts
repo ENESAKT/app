@@ -8,10 +8,10 @@ plugins {
 android {
     namespace = "com.friendapp.frontend"
 
-    // 🔥 GÜNCELLENDİ: Hata mesajına göre 36 yapıldı
-    compileSdk = 36
+    // ✅ GÜNCELLEME: SDK 35 daha stabil (36 çok yeni olabilir)
+    compileSdk = 35
 
-    // 🔥 GÜNCELLENDİ: Hata mesajına göre yeni sürüm eklendi
+    // NDK version
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -31,9 +31,23 @@ android {
 
         versionCode = 1
         versionName = "1.0"
+        
+        // ✅ MultiDex support (Supabase + Firebase = many methods)
+        multiDexEnabled = true
     }
 
     buildTypes {
+        // ✅ DEBUG BUILD TYPE - ProGuard KAPALI
+        debug {
+            isMinifyEnabled = false
+            isShrinkResources = false
+            isDebuggable = true
+            
+            // Debug için signing (development)
+            signingConfig = signingConfigs.getByName("debug")
+        }
+        
+        // ✅ RELEASE BUILD TYPE - ProGuard AÇIK
         release {
             signingConfig = signingConfigs.getByName("debug")
             
