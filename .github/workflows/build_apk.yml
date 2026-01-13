@@ -55,25 +55,24 @@ jobs:
           flutter pub get
           flutter pub upgrade
 
-      - name: 🔍 Verify Build Configuration
-        working-directory: ./frontend
-        run: |
-          echo "=== Build Configuration ==="
-          cat android/app/build.gradle.kts | grep "compileSdk"
-          cat android/app/build.gradle.kts | grep "targetSdk"
-          cat android/app/build.gradle.kts | grep "namespace"
-          echo "==========================="
-
+      # 🔥 KRİTİK DÜZELTME BURADA YAPILDI 🔥
       - name: 🔐 Decode and Setup Release Keystore
         working-directory: ./frontend/android/app
         run: |
           echo "╔════════════════════════════════════════════════════════"
-          echo "🔐 Decoding Release Keystore from GitHub Secrets"
+          echo "🔐 Decoding Release Keystore (Safe Mode)"
           echo "╔════════════════════════════════════════════════════════"
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > upload-keystore.jks
-          echo "✅ Keystore decoded successfully"
-          echo "📄 Keystore file: upload-keystore.jks"
-          ls -lh upload-keystore.jks
+          
+          # Base64 içindeki boşlukları temizleyip decode ediyoruz
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\r\n' | base64 --decode > upload-keystore.jks
+          
+          if [ -s upload-keystore.jks ]; then
+            echo "✅ Keystore decoded successfully!"
+            ls -lh upload-keystore.jks
+          else
+            echo "❌ ERROR: Keystore file is empty! Check your GitHub Secret."
+            exit 1
+          fi
           echo "╔════════════════════════════════════════════════════════"
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -88,6 +87,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # Gradle bu değişkenleri buradan okuyacak:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -141,12 +141,6 @@ jobs:
             1. APK dosyasını indirin
             2. Telefonunuzda "Bilinmeyen Kaynaklardan Kurulum" aktif olmalı
             3. APK'yı kurun
-            
-            ### 🔧 Build Info
-            - Java: 17 (Temurin)
-            - Android SDK: 36
-            - Flutter: Stable Channel
-            - Supabase: Configured
           files: frontend/build/app/outputs/flutter-apk/app-release.apk
           draft: false
           prerelease: false
@@ -157,7 +151,4 @@ jobs:
         run: |
           echo "════════════════════════════════════════════════════════"
           echo "✅ APK Build Successful!"
-          echo "════════════════════════════════════════════════════════"
-          echo "📦 APK: frontend/build/app/outputs/flutter-apk/app-release.apk"
-          echo "🔗 Workflow: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo "════════════════════════════════════════════════════════"
