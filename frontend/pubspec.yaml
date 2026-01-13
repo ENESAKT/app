@@ -44,10 +44,12 @@ dependencies:
   intl: ^0.19.0
   url_launcher: ^6.3.1
   
-  # OTA Updates (Modern alternative to r_upgrade)
+  # OTA Updates (In-App Download & Install)
   package_info_plus: ^8.0.3
-  dio: ^5.4.0              # HTTP client for downloading APK
-  open_filex: ^4.4.0       # Open APK file for installation (Flutter V2 compatible)
+  dio: ^5.4.0
+  open_filex: ^4.4.0
+  path_provider: ^2.1.2
+  permission_handler: ^11.3.0
 
 dev_dependencies:
   flutter_test:

@@ -6,8 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'services/auth_provider.dart';
 import 'services/database_seeder.dart';
-import 'services/update_service.dart';
 import 'screens/login_screen.dart';
+import 'screens/main_layout.dart';
 import 'screens/home_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/conversations_screen.dart';
@@ -131,52 +131,52 @@ class AuthWrapper extends StatefulWidget {
 }
 
 class _AuthWrapperState extends State<AuthWrapper> {
-  final UpdateService _updateService = UpdateService();
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<AuthProvider>(context, listen: false).checkAuth();
-      _initUpdateService();
     });
-  }
-
-  @override
-  void dispose() {
-    _updateService.dispose();
-    super.dispose();
-  }
-
-  /// Güncelleme servisini başlat (build_number, realtime listener)
-  Future<void> _initUpdateService() async {
-    if (!mounted) return;
-    await _updateService.init(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
+        // Yükleniyor
         if (auth.isLoading) {
-          return const Scaffold(
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Yükleniyor...'),
-                ],
+          return Scaffold(
+            body: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.deepPurple, Colors.purple],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: Colors.white),
+                    SizedBox(height: 20),
+                    Text(
+                      'Yükleniyor...',
+                      style: TextStyle(color: Colors.white, fontSize: 18),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
         }
 
+        // Giriş yapılmış -> MainLayout
         if (auth.isLoggedIn) {
-          return const HomeScreen();
+          return const MainLayout();
         }
 
+        // Giriş yapılmamış -> Login
         return const LoginScreen();
       },
     );
