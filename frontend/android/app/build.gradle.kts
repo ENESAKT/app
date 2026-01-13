@@ -1,3 +1,5 @@
+// Build tetikleme denemesi
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
