@@ -62,28 +62,59 @@ jobs:
           echo "🔐 Decoding Release Keystore from GitHub Secrets"
           echo "════════════════════════════════════════════════════════"
           
-          # GitHub Secret'taki Base64 string'i temizle (satır sonları, boşluklar)
+          # Mevcut dizini göster
+          echo "📁 Current directory: $(pwd)"
+          
+          # GitHub Secret'taki Base64 string'i temizle ve decode et
           echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\r\n\t ' | base64 --decode > upload-keystore.jks
           
           # Dosyanın başarıyla oluşturulup oluşturulmadığını kontrol et
           if [ -f upload-keystore.jks ] && [ -s upload-keystore.jks ]; then
             KEYSTORE_SIZE=$(stat -f%z upload-keystore.jks 2>/dev/null || stat -c%s upload-keystore.jks)
             echo "✅ Keystore decoded successfully!"
-            echo "📄 File: upload-keystore.jks"
+            echo "📄 File: $(pwd)/upload-keystore.jks"
             echo "📊 Size: $KEYSTORE_SIZE bytes"
+            echo "🔑 Permissions: $(ls -l upload-keystore.jks | awk '{print $1}')"
             ls -lh upload-keystore.jks
           else
             echo "❌ ERROR: Keystore decode FAILED!"
-            echo "   Possible causes:"
-            echo "   1. KEYSTORE_BASE64 secret is empty or invalid"
-            echo "   2. Base64 string is corrupted"
-            echo "   3. File permissions issue"
+            echo "   Attempted path: $(pwd)/upload-keystore.jks"
             exit 1
           fi
           
           echo "════════════════════════════════════════════════════════"
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+
+      - name: 🔍 Debug - Verify Keystore Location
+        working-directory: ./frontend
+        run: |
+          echo "════════════════════════════════════════════════════════"
+          echo "🔍 Verifying Keystore File Location"
+          echo "════════════════════════════════════════════════════════"
+          
+          echo "📁 Current directory: $(pwd)"
+          echo ""
+          
+          echo "📂 Android directory structure:"
+          ls -la android/app/ || echo "android/app directory not found!"
+          echo ""
+          
+          echo "🔍 Searching for upload-keystore.jks:"
+          find android -name "upload-keystore.jks" -type f 2>/dev/null || echo "File not found in android directory"
+          echo ""
+          
+          # Keystore dosyasını kontrol et
+          if [ -f "android/app/upload-keystore.jks" ]; then
+            echo "✅ Keystore found: android/app/upload-keystore.jks"
+            ls -lh android/app/upload-keystore.jks
+            echo "   Absolute path: $(realpath android/app/upload-keystore.jks)"
+          else
+            echo "❌ Keystore NOT found at expected location!"
+            echo "   Expected: android/app/upload-keystore.jks"
+          fi
+          
+          echo "════════════════════════════════════════════════════════"
 
       - name: 🔍 Debug - Print Signing Configuration
         working-directory: ./frontend/android
