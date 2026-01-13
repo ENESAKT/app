@@ -55,39 +55,89 @@ jobs:
           flutter pub get
           flutter pub upgrade
 
-      # 🔥 KRİTİK DÜZELTME BURADA YAPILDI 🔥
       - name: 🔐 Decode and Setup Release Keystore
         working-directory: ./frontend/android/app
         run: |
-          echo "╔════════════════════════════════════════════════════════"
-          echo "🔐 Decoding Release Keystore (Safe Mode)"
-          echo "╔════════════════════════════════════════════════════════"
+          echo "════════════════════════════════════════════════════════"
+          echo "🔐 Decoding Release Keystore from GitHub Secrets"
+          echo "════════════════════════════════════════════════════════"
           
-          # Base64 içindeki boşlukları temizleyip decode ediyoruz
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\r\n' | base64 --decode > upload-keystore.jks
+          # GitHub Secret'taki Base64 string'i temizle (satır sonları, boşluklar)
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\r\n\t ' | base64 --decode > upload-keystore.jks
           
-          if [ -s upload-keystore.jks ]; then
+          # Dosyanın başarıyla oluşturulup oluşturulmadığını kontrol et
+          if [ -f upload-keystore.jks ] && [ -s upload-keystore.jks ]; then
+            KEYSTORE_SIZE=$(stat -f%z upload-keystore.jks 2>/dev/null || stat -c%s upload-keystore.jks)
             echo "✅ Keystore decoded successfully!"
+            echo "📄 File: upload-keystore.jks"
+            echo "📊 Size: $KEYSTORE_SIZE bytes"
             ls -lh upload-keystore.jks
           else
-            echo "❌ ERROR: Keystore file is empty! Check your GitHub Secret."
+            echo "❌ ERROR: Keystore decode FAILED!"
+            echo "   Possible causes:"
+            echo "   1. KEYSTORE_BASE64 secret is empty or invalid"
+            echo "   2. Base64 string is corrupted"
+            echo "   3. File permissions issue"
             exit 1
           fi
-          echo "╔════════════════════════════════════════════════════════"
+          
+          echo "════════════════════════════════════════════════════════"
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
-      - name: 🔧 Build APK (Release)
+      - name: 🔍 Verify Signing Environment Variables
+        run: |
+          echo "════════════════════════════════════════════════════════"
+          echo "� Verifying Signing Configuration"
+          echo "════════════════════════════════════════════════════════"
+          
+          # Environment variable'ların varlığını kontrol et (değerlerini gösterme!)
+          if [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "❌ KEYSTORE_PASSWORD is NOT set!"
+            exit 1
+          else
+            echo "✅ KEYSTORE_PASSWORD is set (length: ${#KEYSTORE_PASSWORD})"
+          fi
+          
+          if [ -z "$KEY_ALIAS" ]; then
+            echo "❌ KEY_ALIAS is NOT set!"
+            exit 1
+          else
+            echo "✅ KEY_ALIAS is set: $KEY_ALIAS"
+          fi
+          
+          if [ -z "$KEY_PASSWORD" ]; then
+            echo "❌ KEY_PASSWORD is NOT set!"
+            exit 1
+          else
+            echo "✅ KEY_PASSWORD is set (length: ${#KEY_PASSWORD})"
+          fi
+          
+          echo "════════════════════════════════════════════════════════"
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: �🔧 Build APK (Release)
         working-directory: ./frontend
         run: |
+          echo "════════════════════════════════════════════════════════"
+          echo "🔧 Starting Flutter Release Build"
+          echo "════════════════════════════════════════════════════════"
+          
           flutter build apk --release \
             --no-tree-shake-icons \
             --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
             --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+          
+          echo "════════════════════════════════════════════════════════"
+          echo "✅ Flutter build completed successfully!"
+          echo "════════════════════════════════════════════════════════"
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          # Gradle bu değişkenleri buradan okuyacak:
+          # Gradle signing için gerekli environment variables
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -151,4 +201,6 @@ jobs:
         run: |
           echo "════════════════════════════════════════════════════════"
           echo "✅ APK Build Successful!"
+          echo "📦 APK: frontend/build/app/outputs/flutter-apk/app-release.apk"
+          echo "🔗 Workflow: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo "════════════════════════════════════════════════════════"

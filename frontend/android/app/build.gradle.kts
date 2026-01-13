@@ -11,9 +11,11 @@ plugins {
 android {
     namespace = "com.friendapp.frontend"
 
-    // 🔐 Keystore Properties (GitHub Secrets veya lokal key.properties)
+    // 🔐 Keystore Properties - Hibrit Yapı (Lokal + CI/CD)
     val keystorePropertiesFile = rootProject.file("key.properties")
     val keystoreProperties = Properties()
+    
+    // Lokal geliştirme için key.properties dosyasını yükle (varsa)
     if (keystorePropertiesFile.exists()) {
         keystoreProperties.load(FileInputStream(keystorePropertiesFile))
     }
@@ -31,13 +33,32 @@ android {
         jvmTarget = "17"
     }
 
-    // 🔐 Signing Configurations (İmzalama Ayarları)
+    // 🔐 Signing Configurations - Hem Lokal Hem CI/CD Destekli
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties.getProperty("keyAlias") ?: System.getenv("KEY_ALIAS")
-            keyPassword = keystoreProperties.getProperty("keyPassword") ?: System.getenv("KEY_PASSWORD")
-            storeFile = file(keystoreProperties.getProperty("storeFile") ?: "upload-keystore.jks")
-            storePassword = keystoreProperties.getProperty("storePassword") ?: System.getenv("KEYSTORE_PASSWORD")
+            // Önce key.properties'den oku, yoksa environment variables kullan
+            val alias = keystoreProperties.getProperty("keyAlias") ?: System.getenv("KEY_ALIAS")
+            val keyPass = keystoreProperties.getProperty("keyPassword") ?: System.getenv("KEY_PASSWORD")
+            val storeFilePath = keystoreProperties.getProperty("storeFile") ?: "upload-keystore.jks"
+            val storePass = keystoreProperties.getProperty("storePassword") ?: System.getenv("KEYSTORE_PASSWORD")
+            
+            // Null-safety check ve assignment
+            if (alias != null && keyPass != null && storePass != null) {
+                keyAlias = alias
+                keyPassword = keyPass
+                storeFile = file(storeFilePath)
+                storePassword = storePass
+                
+                println("🔐 Release signing configured successfully!")
+                println("   Key Alias: $alias")
+                println("   Store File: $storeFilePath")
+            } else {
+                println("⚠️  WARNING: Release signing config incomplete!")
+                println("   Missing environment variables or key.properties")
+                println("   KEY_ALIAS: ${if (alias != null) "✅" else "❌"}")
+                println("   KEY_PASSWORD: ${if (keyPass != null) "✅" else "❌"}")
+                println("   KEYSTORE_PASSWORD: ${if (storePass != null) "✅" else "❌"}")
+            }
         }
     }
 
