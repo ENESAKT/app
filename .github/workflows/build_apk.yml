@@ -44,9 +44,6 @@ jobs:
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" > .env
           echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
           echo "✅ Supabase secrets configured"
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
       - name: 📦 Get Flutter Dependencies
         working-directory: ./frontend
@@ -55,30 +52,25 @@ jobs:
           flutter pub get
           flutter pub upgrade
 
-      - name: 🔐 Decode and Setup Release Keystore
-        working-directory: ./frontend/android/app
+      - name: 🔐 Decode Release Keystore
         run: |
           echo "════════════════════════════════════════════════════════"
-          echo "🔐 Decoding Release Keystore from GitHub Secrets"
+          echo "🔐 Decoding Release Keystore"
           echo "════════════════════════════════════════════════════════"
           
-          # Mevcut dizini göster
-          echo "📁 Current directory: $(pwd)"
+          # TAM PATH ile keystore oluştur (working directory yerine absolute path)
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\r\n\t ' | base64 --decode > frontend/android/app/upload-keystore.jks
           
-          # GitHub Secret'taki Base64 string'i temizle ve decode et
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\r\n\t ' | base64 --decode > upload-keystore.jks
-          
-          # Dosyanın başarıyla oluşturulup oluşturulmadığını kontrol et
-          if [ -f upload-keystore.jks ] && [ -s upload-keystore.jks ]; then
-            KEYSTORE_SIZE=$(stat -f%z upload-keystore.jks 2>/dev/null || stat -c%s upload-keystore.jks)
-            echo "✅ Keystore decoded successfully!"
-            echo "📄 File: $(pwd)/upload-keystore.jks"
+          # Dosyanın oluşup oluşmadığını kontrol et
+          if [ -f frontend/android/app/upload-keystore.jks ]; then
+            KEYSTORE_SIZE=$(stat -c%s frontend/android/app/upload-keystore.jks 2>/dev/null || stat -f%z frontend/android/app/upload-keystore.jks)
+            echo "✅ Keystore created successfully!"
+            echo "📄 Location: $(pwd)/frontend/android/app/upload-keystore.jks"
             echo "📊 Size: $KEYSTORE_SIZE bytes"
-            echo "🔑 Permissions: $(ls -l upload-keystore.jks | awk '{print $1}')"
-            ls -lh upload-keystore.jks
+            ls -lh frontend/android/app/upload-keystore.jks
           else
-            echo "❌ ERROR: Keystore decode FAILED!"
-            echo "   Attempted path: $(pwd)/upload-keystore.jks"
+            echo "❌ ERROR: Failed to create keystore!"
+            echo "   Expected: $(pwd)/frontend/android/app/upload-keystore.jks"
             exit 1
           fi
           
@@ -86,45 +78,52 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
-      - name: 🔍 Debug - Verify Keystore Location
-        working-directory: ./frontend
+      - name: 🔍 Verify File Structure
         run: |
           echo "════════════════════════════════════════════════════════"
-          echo "🔍 Verifying Keystore File Location"
+          echo "🔍 Verifying Project Structure"
           echo "════════════════════════════════════════════════════════"
           
-          echo "📁 Current directory: $(pwd)"
+          echo "📁 Root directory: $(pwd)"
           echo ""
           
-          echo "📂 Android directory structure:"
-          ls -la android/app/ || echo "android/app directory not found!"
+          echo "📂 Frontend structure:"
+          ls -la frontend/ | head -10
           echo ""
           
-          echo "🔍 Searching for upload-keystore.jks:"
-          find android -name "upload-keystore.jks" -type f 2>/dev/null || echo "File not found in android directory"
+          echo "📂 Android directory:"
+          ls -la frontend/android/ | head -10
           echo ""
           
-          # Keystore dosyasını kontrol et
-          if [ -f "android/app/upload-keystore.jks" ]; then
-            echo "✅ Keystore found: android/app/upload-keystore.jks"
-            ls -lh android/app/upload-keystore.jks
-            echo "   Absolute path: $(realpath android/app/upload-keystore.jks)"
+          echo "� App directory:"
+          ls -la frontend/android/app/ | grep -E "upload-keystore|build.gradle"
+          echo ""
+          
+          echo "🔍 Checking gradlew:"
+          if [ -f "frontend/android/gradlew" ]; then
+            echo "✅ gradlew found: frontend/android/gradlew"
+            ls -lh frontend/android/gradlew
           else
-            echo "❌ Keystore NOT found at expected location!"
-            echo "   Expected: android/app/upload-keystore.jks"
+            echo "❌ gradlew NOT found!"
           fi
           
           echo "════════════════════════════════════════════════════════"
 
-      - name: 🔍 Debug - Print Signing Configuration
+      - name: 🔍 Debug Signing Configuration
         working-directory: ./frontend/android
         run: |
           echo "════════════════════════════════════════════════════════"
-          echo "🔍 Running Gradle Signing Diagnostics..."
+          echo "🔍 Running Gradle Diagnostics"
           echo "════════════════════════════════════════════════════════"
           
-          # Gradle debug task çalıştır
-          chmod +x ./gradlew
+          echo "📁 Current directory: $(pwd)"
+          echo "📄 gradlew location: $(ls -la gradlew 2>/dev/null || echo 'NOT FOUND')"
+          echo ""
+          
+          # Make gradlew executable
+          chmod +x gradlew
+          
+          # Run debug task
           ./gradlew printSigningConfig
           
           echo "════════════════════════════════════════════════════════"
@@ -133,12 +132,14 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      - name: 🔧 Build APK (Release) - Debug Mode
+      - name: 🔧 Build APK (Release)
         working-directory: ./frontend
         run: |
           echo "════════════════════════════════════════════════════════"
-          echo "🔧 Starting Flutter Release Build (DEBUG MODE)"
+          echo "🔧 Starting Flutter Release Build"
           echo "════════════════════════════════════════════════════════"
+          echo "📁 Working directory: $(pwd)"
+          echo ""
           
           # Flutter build with verbose logging
           flutter build apk --release \
@@ -147,13 +148,23 @@ jobs:
             --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
             --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
           
+          echo ""
           echo "════════════════════════════════════════════════════════"
-          echo "✅ Flutter build completed!"
+          echo "✅ Build completed!"
           echo "════════════════════════════════════════════════════════"
+          
+          # Verify APK exists
+          if [ -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
+            echo "✅ APK created successfully!"
+            ls -lh build/app/outputs/flutter-apk/app-release.apk
+          else
+            echo "❌ APK not found!"
+            exit 1
+          fi
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          # 🔐 Gradle bu environment variables'ları System.getenv() ile okuyacak
+          # Gradle environment variables
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
