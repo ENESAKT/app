@@ -9,44 +9,34 @@ plugins {
     id("com.google.gms.google-services")
 }
 
-// 🔍 DEBUG TASK - Signing Configuration Diagnostics
+// 🔍 DEBUG TASK
 tasks.register("printSigningConfig") {
     doLast {
         println("════════════════════════════════════════════════════════")
         println("🔍 SIGNING CONFIGURATION DIAGNOSTICS")
         println("════════════════════════════════════════════════════════")
         
-        println("📁 Project Directories:")
+        println("📁 Directories:")
         println("   project.projectDir: ${project.projectDir.absolutePath}")
-        println("   project.rootProject.projectDir: ${project.rootProject.projectDir.absolutePath}")
-        println("   System user.dir: ${System.getProperty("user.dir")}")
+        println("   working dir: ${System.getProperty("user.dir")}")
         println()
         
-        // Keystore arama
-        val keystoreName = "upload-keystore.jks"
-        println("🔍 Searching for: $keystoreName")
-        
-        val searchPaths = listOf(
-            File(project.projectDir, keystoreName),
-            File(project.rootProject.projectDir, "app/$keystoreName"),
-            File("${project.rootProject.projectDir}/app", keystoreName)
-        )
-        
-        searchPaths.forEachIndexed { index, file ->
-            println("   ${index + 1}. ${file.absolutePath}")
-            println("      Exists: ${if (file.exists()) "✅ YES (${file.length()} bytes)" else "❌ NO"}")
+        println("🔍 Keystore search:")
+        val keystoreFile = File(project.projectDir, "upload-keystore.jks")
+        println("   Path: ${keystoreFile.absolutePath}")
+        println("   Exists: ${keystoreFile.exists()}")
+        if (keystoreFile.exists()) {
+            println("   Size: ${keystoreFile.length()} bytes")
         }
         println()
         
-        // Environment variables
         println("🔐 Environment Variables:")
-        val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
-        val keyAlias = System.getenv("KEY_ALIAS")
-        val keyPassword = System.getenv("KEY_PASSWORD")
-        
-        println("   KEYSTORE_PASSWORD: ${if (keystorePassword != null) "✅ SET (${keystorePassword.length} chars)" else "❌ NULL"}")
-        println("   KEY_ALIAS: ${if (keyAlias != null) "✅ SET ($keyAlias)" else "❌ NULL"}")
-        println("   KEY_PASSWORD: ${if (keyPassword != null) "✅ SET (${keyPassword.length} chars)" else "❌ NULL"}")
+        val pass = System.getenv("KEYSTORE_PASSWORD")
+        val alias = System.getenv("KEY_ALIAS")
+        val keyPass = System.getenv("KEY_PASSWORD")
+        println("   KEYSTORE_PASSWORD: ${if (pass != null) "✅ SET (${pass.length} chars)" else "❌ NULL"}")
+        println("   KEY_ALIAS: ${if (alias != null) "✅ SET ($alias)" else "❌ NULL"}")
+        println("   KEY_PASSWORD: ${if (keyPass != null) "✅ SET (${keyPass.length} chars)" else "❌ NULL"}")
         
         println("════════════════════════════════════════════════════════")
     }
@@ -67,13 +57,13 @@ android {
         jvmTarget = "17"
     }
 
-    // Keystore Properties (Lokal development için)
+    // Lokal development için key.properties
     val keystorePropertiesFile = rootProject.file("key.properties")
     val keystoreProperties = Properties()
     
     if (keystorePropertiesFile.exists()) {
         keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-        println("✅ Loaded key.properties from: ${keystorePropertiesFile.absolutePath}")
+        println("✅ Loaded key.properties")
     }
 
     signingConfigs {
@@ -82,17 +72,18 @@ android {
             println("🔐 Configuring Release Signing")
             println("════════════════════════════════════════════════════════")
             
-            // Credentials
+            // Environment variables veya key.properties'den oku
             val alias = keystoreProperties.getProperty("keyAlias") ?: System.getenv("KEY_ALIAS")
             val keyPass = keystoreProperties.getProperty("keyPassword") ?: System.getenv("KEY_PASSWORD")
             val storePass = keystoreProperties.getProperty("storePassword") ?: System.getenv("KEYSTORE_PASSWORD")
             
-            // ❌ Credentials kontrolü
+            // ❌ Null kontrolü - Eksik varsa DURDUR
             if (alias == null || keyPass == null || storePass == null) {
-                val missing = mutableListOf<String>()
-                if (alias == null) missing.add("KEY_ALIAS")
-                if (keyPass == null) missing.add("KEY_PASSWORD")
-                if (storePass == null) missing.add("KEYSTORE_PASSWORD")
+                val missing = buildList {
+                    if (alias == null) add("KEY_ALIAS")
+                    if (keyPass == null) add("KEY_PASSWORD")
+                    if (storePass == null) add("KEYSTORE_PASSWORD")
+                }
                 
                 throw GradleException("""
                     ════════════════════════════════════════════════════════
@@ -100,51 +91,33 @@ android {
                     ════════════════════════════════════════════════════════
                     Missing: ${missing.joinToString(", ")}
                     
-                    GitHub Actions: Add secrets to repository settings
+                    GitHub Actions: Add these secrets to repository settings
                     Local build: Create key.properties in android/ folder
                     ════════════════════════════════════════════════════════
                 """.trimIndent())
             }
             
-            // 🔍 Keystore dosyası arama - PROJE YAPISINA UYGUN
-            // Proje yapısı: root/frontend/android/app
-            // gradlew frontend/android dizininde çalışıyor
-            // Bu dosya (build.gradle.kts) android/app dizininde
-            
+            // Keystore dosyası - build.gradle.kts zaten app/ dizininde
+            // Bu yüzden sadece filename yeterli
             val keystoreName = keystoreProperties.getProperty("storeFile") ?: "upload-keystore.jks"
+            val keystoreFile = file(keystoreName)
             
-            // GitHub Actions: keystore app/ dizininde oluşturulmuş olmalı
-            val keystoreFile = File(project.projectDir, keystoreName)
-            
-            println("📁 Looking for keystore:")
+            println("📄 Keystore:")
             println("   Name: $keystoreName")
-            println("   Expected path: ${keystoreFile.absolutePath}")
-            println("   File exists: ${keystoreFile.exists()}")
+            println("   Path: ${keystoreFile.absolutePath}")
+            println("   Exists: ${keystoreFile.exists()}")
             
+            // ❌ Dosya yoksa DURDUR
             if (!keystoreFile.exists()) {
-                // Alternatif yolları da kontrol et
-                val alternativePath1 = File(project.rootProject.projectDir, "app/$keystoreName")
-                val alternativePath2 = File("${project.rootProject.projectDir.absolutePath}/app", keystoreName)
-                
-                println("   Alternative 1: ${alternativePath1.absolutePath} - ${alternativePath1.exists()}")
-                println("   Alternative 2: ${alternativePath2.absolutePath} - ${alternativePath2.exists()}")
-                
                 throw GradleException("""
                     ════════════════════════════════════════════════════════
                     ❌ KEYSTORE FILE NOT FOUND!
                     ════════════════════════════════════════════════════════
                     Expected: ${keystoreFile.absolutePath}
                     
-                    Searched locations:
-                      1. ${keystoreFile.absolutePath}
-                      2. ${alternativePath1.absolutePath}
-                      3. ${alternativePath2.absolutePath}
+                    build.gradle.kts location: ${project.projectDir.absolutePath}
                     
-                    Project structure:
-                      - project.projectDir: ${project.projectDir.absolutePath}
-                      - rootProject.projectDir: ${project.rootProject.projectDir.absolutePath}
-                    
-                    GitHub Actions: Verify keystore decode creates file at:
+                    GitHub Actions: Keystore should be at:
                       frontend/android/app/upload-keystore.jks
                     
                     Local build: Place keystore in android/app/ folder
@@ -152,20 +125,20 @@ android {
                 """.trimIndent())
             }
             
-            // Dosya boyutu kontrolü
+            // ❌ Dosya boş mu kontrol et
             if (keystoreFile.length() == 0L) {
                 throw GradleException("❌ Keystore file is EMPTY (0 bytes): ${keystoreFile.absolutePath}")
             }
             
-            // ✅ Tüm kontroller geçti - Signing config ayarla
+            // ✅ Tüm kontroller geçti - Config ayarla
             keyAlias = alias
             keyPassword = keyPass
             storeFile = keystoreFile
             storePassword = storePass
             
-            println("✅ Signing configured successfully!")
+            println("✅ Signing configured!")
             println("   Alias: $alias")
-            println("   Store: ${keystoreFile.absolutePath}")
+            println("   File: ${keystoreFile.absolutePath}")
             println("   Size: ${keystoreFile.length()} bytes")
             println("════════════════════════════════════════════════════════")
         }
