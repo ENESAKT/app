@@ -64,6 +64,20 @@ jobs:
           cat android/app/build.gradle.kts | grep "namespace"
           echo "==========================="
 
+      - name: 🔐 Decode and Setup Release Keystore
+        working-directory: ./frontend/android/app
+        run: |
+          echo "╔════════════════════════════════════════════════════════"
+          echo "🔐 Decoding Release Keystore from GitHub Secrets"
+          echo "╔════════════════════════════════════════════════════════"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > upload-keystore.jks
+          echo "✅ Keystore decoded successfully"
+          echo "📄 Keystore file: upload-keystore.jks"
+          ls -lh upload-keystore.jks
+          echo "╔════════════════════════════════════════════════════════"
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+
       - name: 🔧 Build APK (Release)
         working-directory: ./frontend
         run: |
@@ -74,6 +88,9 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: 📊 Upload Build Logs (on failure)
         if: failure()

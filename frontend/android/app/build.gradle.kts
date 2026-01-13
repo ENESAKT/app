@@ -8,6 +8,13 @@ plugins {
 android {
     namespace = "com.friendapp.frontend"
 
+    // 🔐 Keystore Properties (GitHub Secrets veya lokal key.properties)
+    val keystorePropertiesFile = rootProject.file("key.properties")
+    val keystoreProperties = java.util.Properties()
+    if (keystorePropertiesFile.exists()) {
+        keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))
+    }
+
     // ✅ GÜNCELLEME: SDK 36 (Plugins require this)
     compileSdk = 36
 
@@ -21,6 +28,16 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    // 🔐 Signing Configurations
+    signingConfigs {
+        create("release") {
+            keyAlias = keystoreProperties.getProperty("keyAlias") ?: System.getenv("KEY_ALIAS")
+            keyPassword = keystoreProperties.getProperty("keyPassword") ?: System.getenv("KEY_PASSWORD")
+            storeFile = file(keystoreProperties.getProperty("storeFile") ?: "upload-keystore.jks")
+            storePassword = keystoreProperties.getProperty("storePassword") ?: System.getenv("KEYSTORE_PASSWORD")
+        }
     }
 
     defaultConfig {
@@ -47,9 +64,10 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
         
-        // ✅ RELEASE BUILD TYPE - ProGuard AÇIK
+        // ✅ RELEASE BUILD TYPE - ProGuard AÇIK + Release Keystore
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            // ✅ PRODUCTION KEYSTORE ile imzala
+            signingConfig = signingConfigs.getByName("release")
             
             // Enable code shrinking, obfuscation, and optimization
             isMinifyEnabled = true

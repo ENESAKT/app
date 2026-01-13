@@ -1,0 +1,14 @@
+# 🔐 Android Release Signing Properties
+# Bu dosyayı "key.properties" olarak kopyalayın ve gerçek değerlerinizi girin
+# UYARI: key.properties dosyasını ASLA Git'e commit etmeyin!
+
+storePassword=YOUR_KEYSTORE_PASSWORD_HERE
+keyPassword=YOUR_KEY_PASSWORD_HERE
+keyAlias=upload
+storeFile=upload-keystore.jks
+
+# Örnek kullanım:
+# 1. Bu dosyayı kopyalayın: cp key.properties.example key.properties
+# 2. key.properties dosyasını editleyip gerçek şifrelerinizi girin
+# 3. upload-keystore.jks dosyanızı android/ klasörüne koyun
+# 4. flutter build apk --release ile build yapın
