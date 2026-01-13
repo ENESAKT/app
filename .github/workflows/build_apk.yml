@@ -85,21 +85,39 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
-      - name:  Build APK (Release)
+      - name: 🔍 Debug - Print Signing Configuration
+        working-directory: ./frontend/android
+        run: |
+          echo "════════════════════════════════════════════════════════"
+          echo "🔍 Running Gradle Signing Diagnostics..."
+          echo "════════════════════════════════════════════════════════"
+          
+          # Gradle debug task çalıştır
+          chmod +x ./gradlew
+          ./gradlew printSigningConfig
+          
+          echo "════════════════════════════════════════════════════════"
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: 🔧 Build APK (Release) - Debug Mode
         working-directory: ./frontend
         run: |
           echo "════════════════════════════════════════════════════════"
-          echo "🔧 Starting Flutter Release Build"
+          echo "🔧 Starting Flutter Release Build (DEBUG MODE)"
           echo "════════════════════════════════════════════════════════"
           
-          # Gradle'a environment variables aktarılacak
+          # Flutter build with verbose logging
           flutter build apk --release \
             --no-tree-shake-icons \
+            --verbose \
             --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
             --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
           
           echo "════════════════════════════════════════════════════════"
-          echo "✅ Flutter build completed successfully!"
+          echo "✅ Flutter build completed!"
           echo "════════════════════════════════════════════════════════"
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
