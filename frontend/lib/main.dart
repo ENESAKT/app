@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'services/auth_provider.dart';
 import 'services/database_seeder.dart';
 import 'screens/login_screen.dart';
-import 'screens/main_layout.dart';
+import 'screens/main_scaffold.dart';
 import 'screens/home_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/conversations_screen.dart';
@@ -18,6 +18,7 @@ import 'screens/email_verification_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/friends_screen.dart';
 import 'screens/seed_data_screen.dart'; // DEV ONLY
+import 'widgets/smart_loading_widget.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -134,46 +135,38 @@ class _AuthWrapperState extends State<AuthWrapper> {
   @override
   void initState() {
     super.initState();
+    _initApp();
+  }
+
+  Future<void> _initApp() async {
+    // Uygulama başlarken auth kontrolü yap (async, bloklamadan)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<AuthProvider>(context, listen: false).checkAuth();
     });
+  }
+
+  void _retryAuth() {
+    Provider.of<AuthProvider>(context, listen: false).checkAuth();
   }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
-        // Yükleniyor
+        // Yükleniyor - Akıllı Bekleme Ekranı
         if (auth.isLoading) {
           return Scaffold(
-            body: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.deepPurple, Colors.purple],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(color: Colors.white),
-                    SizedBox(height: 20),
-                    Text(
-                      'Yükleniyor...',
-                      style: TextStyle(color: Colors.white, fontSize: 18),
-                    ),
-                  ],
-                ),
-              ),
+            body: SmartLoadingWidget(
+              title: 'Arkadaşlık',
+              showServerMessage: true,
+              onRetry: _retryAuth,
             ),
           );
         }
 
         // Giriş yapılmış -> MainLayout
         if (auth.isLoggedIn) {
-          return const MainLayout();
+          return const MainScaffold();
         }
 
         // Giriş yapılmamış -> Login
