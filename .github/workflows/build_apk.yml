@@ -84,16 +84,7 @@ jobs:
           ls -lah frontend/android/app/ | grep -E "upload-keystore|build.gradle"
           echo "════════════════════════════════════════════════════════"
 
-      - name: � Make Gradlew Executable
-        working-directory: ./frontend/android
-        run: |
-          echo "📁 Current directory: $(pwd)"
-          echo "🔧 Making gradlew executable..."
-          chmod +x gradlew
-          echo "✅ gradlew is now executable"
-          ls -lh gradlew
-
-      - name: 🔍 Debug Signing Configuration
+      - name:  Debug Signing Configuration
         working-directory: ./frontend/android
         run: |
           echo "════════════════════════════════════════════════════════"
@@ -101,7 +92,8 @@ jobs:
           echo "════════════════════════════════════════════════════════"
           echo "📁 Current directory: $(pwd)"
           
-          ./gradlew printSigningConfig
+          # Global gradle kullan (gradlew yerine)
+          gradle printSigningConfig
           
           echo "════════════════════════════════════════════════════════"
         env:
