@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import '../services/auth_provider.dart';
-import '../services/supabase_service.dart';
-import '../services/update_service.dart';
-import '../widgets/update_dialog.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/chat_service.dart';
+import '../services/friendship_service.dart';
 import 'chat_screen.dart';
+import 'search_screen.dart';
+import 'settings_screen.dart';
 
-/// Ana Sayfa - Kullanıcı listesi (sohbet için)
+/// HomeScreen - Ana sayfa
+///
+/// Özellikler:
+/// - Aktif kullanıcılar (Story bar)
+/// - Son konuşmalar listesi
+/// - Okunmamış mesaj rozetleri
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -16,283 +20,410 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final SupabaseService _supabaseService = SupabaseService();
-  List<Map<String, dynamic>> _users = [];
+  final ChatService _chatService = ChatService();
+  final FriendshipService _friendshipService = FriendshipService();
+
+  List<Map<String, dynamic>> _conversations = [];
+  List<Map<String, dynamic>> _friends = [];
   bool _isLoading = true;
-  String? _error;
+  String? _currentUserId;
+
+  // Renk paleti (Telegram mavisi tonları)
+  static const Color _primaryColor = Color(0xFF0088CC);
+  static const Color _accentColor = Color(0xFF00A8E8);
+  static const Color _backgroundColor = Color(0xFFF5F7FA);
+  static const Color _cardColor = Colors.white;
 
   @override
   void initState() {
     super.initState();
-    _loadUsers();
-    _checkForUpdates(); // OTA güncelleme kontrolü
+    _currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    _loadData();
   }
 
-  Future<void> _checkForUpdates() async {
-    // Uygulama açıldıktan 2 saniye sonra kontrol et
-    await Future.delayed(const Duration(seconds: 2));
-
-    if (!mounted) return;
-
-    final updateService = UpdateService();
-    final updateInfo = await updateService.checkForUpdate();
-
-    if (updateInfo != null && mounted) {
-      // Güncelleme mevcut - Dialog göster
-      UpdateDialog.show(context, updateInfo);
-    }
-  }
-
-  Future<void> _loadUsers() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final currentUserId = auth.firebaseUser?.uid;
-
-    if (currentUserId == null) {
-      setState(() {
-        _error = 'Giriş yapmalısınız';
-        _isLoading = false;
-      });
-      return;
-    }
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
 
     try {
-      // Tüm kullanıcıları getir
-      final response = await _supabaseService.client
-          .from('users')
-          .select()
-          .neq('id', currentUserId) // Kendisi hariç
-          .order('created_at', ascending: false);
+      final conversations = await _chatService.getConversations();
+      final friends = await _friendshipService.getFriends(
+        userId: _currentUserId ?? '',
+      );
 
       setState(() {
-        _users = List<Map<String, dynamic>>.from(response);
+        _conversations = conversations;
+        _friends = friends;
         _isLoading = false;
       });
-
-      print('✅ ${_users.length} kullanıcı yüklendi');
     } catch (e) {
-      setState(() {
-        _error = 'Kullanıcılar yüklenemedi: $e';
-        _isLoading = false;
-      });
-      print('❌ Kullanıcı yükleme hatası: $e');
+      setState(() => _isLoading = false);
+      print('❌ Veri yükleme hatası: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context);
-    final user = auth.currentUser;
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mesajlar'),
-        backgroundColor: const Color(0xFF667eea),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          // Profil menüsü
-          PopupMenuButton<String>(
-            icon: CircleAvatar(
-              radius: 16,
-              backgroundImage: user?.profilePhoto != null
-                  ? CachedNetworkImageProvider(user!.profilePhoto!)
-                  : null,
-              child: user?.profilePhoto == null
-                  ? const Icon(Icons.person, size: 20)
-                  : null,
-            ),
-            onSelected: (value) {
-              if (value == 'logout') {
-                auth.signOut();
-                Navigator.pushReplacementNamed(context, '/login');
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                enabled: false,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user?.fullName ?? 'Kullanıcı',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+      backgroundColor: _backgroundColor,
+      appBar: _buildAppBar(),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadData,
+              child: CustomScrollView(
+                slivers: [
+                  // Story Bar (Aktif Kullanıcılar)
+                  SliverToBoxAdapter(child: _buildStoryBar()),
+
+                  // Konuşmalar Başlığı
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: Text(
+                        'Mesajlar',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[800],
+                        ),
                       ),
                     ),
-                    Text(
-                      user?.email ?? '',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
+                  ),
+
+                  // Konuşma Listesi
+                  _conversations.isEmpty
+                      ? SliverFillRemaining(child: _buildEmptyState())
+                      : SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) =>
+                                _buildConversationTile(_conversations[index]),
+                            childCount: _conversations.length,
+                          ),
+                        ),
+                ],
               ),
-              const PopupMenuDivider(),
-              const PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Çıkış Yap'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      body: _buildBody(),
+            ),
+      floatingActionButton: _buildFAB(),
     );
   }
 
-  Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red[400]),
-            const SizedBox(height: 16),
-            Text(
-              _error!,
-              style: const TextStyle(fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _loadUsers,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Tekrar Dene'),
-            ),
-          ],
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: _primaryColor,
+      elevation: 0,
+      title: const Text(
+        'FriendApp',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.search),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SearchScreen()),
+          ),
         ),
-      );
-    }
-
-    if (_users.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.people_outline, size: 80, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'Henüz kullanıcı yok',
-              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'İlk kullanıcı sensin!',
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-            ),
-          ],
+        IconButton(
+          icon: const Icon(Icons.settings),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+          ),
         ),
-      );
-    }
+      ],
+    );
+  }
 
-    return RefreshIndicator(
-      onRefresh: _loadUsers,
+  Widget _buildStoryBar() {
+    if (_friends.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      height: 110,
+      color: _cardColor,
       child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: _users.length,
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        itemCount: _friends.length,
         itemBuilder: (context, index) {
-          final otherUser = _users[index];
-          return _buildUserTile(otherUser);
+          final friend = _friends[index];
+          final isOnline = friend['is_online'] ?? false;
+
+          return GestureDetector(
+            onTap: () => _openChat(friend),
+            child: Container(
+              width: 70,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              child: Column(
+                children: [
+                  // Avatar with online indicator
+                  Stack(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: isOnline
+                                ? [_accentColor, _primaryColor]
+                                : [Colors.grey[300]!, Colors.grey[400]!],
+                          ),
+                        ),
+                        child: CircleAvatar(
+                          radius: 28,
+                          backgroundColor: Colors.white,
+                          child: CircleAvatar(
+                            radius: 26,
+                            backgroundImage: friend['avatar_url'] != null
+                                ? NetworkImage(friend['avatar_url'])
+                                : null,
+                            backgroundColor: Colors.grey[200],
+                            child: friend['avatar_url'] == null
+                                ? Text(
+                                    (friend['username'] ?? 'U')[0]
+                                        .toUpperCase(),
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ),
+                      if (isOnline)
+                        Positioned(
+                          right: 2,
+                          bottom: 2,
+                          child: Container(
+                            width: 14,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  // Username
+                  Text(
+                    friend['username'] ?? 'User',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                  ),
+                ],
+              ),
+            ),
+          );
         },
       ),
     );
   }
 
-  Widget _buildUserTile(Map<String, dynamic> otherUser) {
-    final username = otherUser['username'] ?? 'Kullanıcı';
-    final email = otherUser['email'] ?? '';
-    final avatarUrl = otherUser['avatar_url'];
-    final bio = otherUser['bio'] ?? '';
+  Widget _buildConversationTile(Map<String, dynamic> conversation) {
+    final otherUser = conversation['other_user'] ?? {};
+    final lastMessage = conversation['last_message'] ?? {};
+    final unreadCount = conversation['unread_count'] ?? 0;
+    final isRead = lastMessage['is_read'] ?? true;
+    final isMine = lastMessage['sender_id'] == _currentUserId;
 
-    return InkWell(
-      onTap: () {
-        // Chat ekranına git
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatScreen(
-              friendId: otherUser['id'],
-              friendName: username,
-              friendAvatar: avatarUrl,
-            ),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: _cardColor,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-        ),
-        child: Row(
+        ],
+      ),
+      child: ListTile(
+        onTap: () => _openChat(otherUser),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Stack(
           children: [
-            // Avatar
             CircleAvatar(
               radius: 28,
-              backgroundImage: avatarUrl != null
-                  ? CachedNetworkImageProvider(avatarUrl)
+              backgroundImage: otherUser['avatar_url'] != null
+                  ? NetworkImage(otherUser['avatar_url'])
                   : null,
-              child: avatarUrl == null
+              backgroundColor: _primaryColor.withOpacity(0.1),
+              child: otherUser['avatar_url'] == null
                   ? Text(
-                      username.isNotEmpty ? username[0].toUpperCase() : '?',
-                      style: const TextStyle(fontSize: 20),
+                      (otherUser['username'] ?? 'U')[0].toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: _primaryColor,
+                      ),
                     )
                   : null,
             ),
-            const SizedBox(width: 12),
-
-            // Kullanıcı bilgileri
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    username,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
+            if (otherUser['is_online'] == true)
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
                   ),
-                  if (bio.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      bio,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                    ),
-                  ] else ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      email,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                    ),
-                  ],
-                ],
+                ),
+              ),
+          ],
+        ),
+        title: Text(
+          otherUser['username'] ?? 'Kullanıcı',
+          style: TextStyle(
+            fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.w500,
+            fontSize: 16,
+          ),
+        ),
+        subtitle: Row(
+          children: [
+            // Çift tik ikonu
+            if (isMine) ...[
+              Icon(
+                Icons.done_all,
+                size: 16,
+                color: isRead ? _primaryColor : Colors.grey,
+              ),
+              const SizedBox(width: 4),
+            ],
+            Expanded(
+              child: Text(
+                lastMessage['content'] ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: unreadCount > 0 ? Colors.black87 : Colors.grey[600],
+                  fontWeight: unreadCount > 0
+                      ? FontWeight.w500
+                      : FontWeight.normal,
+                ),
               ),
             ),
-
-            // Mesaj ikonu
-            Icon(Icons.chat_bubble_outline, color: Colors.grey[400]),
+          ],
+        ),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              _formatTime(lastMessage['created_at']),
+              style: TextStyle(
+                fontSize: 12,
+                color: unreadCount > 0 ? _primaryColor : Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 4),
+            if (unreadCount > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _primaryColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  unreadCount.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.chat_bubble_outline, size: 80, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          Text(
+            'Henüz mesaj yok',
+            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Arkadaş ekleyerek sohbete başla',
+            style: TextStyle(color: Colors.grey[400]),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SearchScreen()),
+            ),
+            icon: const Icon(Icons.person_add),
+            label: const Text('Arkadaş Bul'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primaryColor,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFAB() {
+    return FloatingActionButton(
+      onPressed: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const SearchScreen()),
+      ),
+      backgroundColor: _primaryColor,
+      child: const Icon(Icons.edit, color: Colors.white),
+    );
+  }
+
+  void _openChat(Map<String, dynamic> user) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          friendId: user['id'],
+          friendName: user['username'] ?? 'Kullanıcı',
+          friendAvatar: user['avatar_url'],
+        ),
+      ),
+    );
+  }
+
+  String _formatTime(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final date = DateTime.parse(dateStr);
+      final now = DateTime.now();
+      final diff = now.difference(date);
+
+      if (diff.inMinutes < 1) return 'Şimdi';
+      if (diff.inHours < 1) return '${diff.inMinutes}dk';
+      if (diff.inDays < 1) return '${diff.inHours}sa';
+      if (diff.inDays < 7) return '${diff.inDays}g';
+      return '${date.day}/${date.month}';
+    } catch (e) {
+      return '';
+    }
   }
 }

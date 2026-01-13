@@ -1,132 +1,292 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/update_info.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-/// OTA Update Servisi
+/// Update Info Model - Güncelleme bilgileri
+class AppUpdateInfo {
+  final String currentVersion;
+  final int buildNumber;
+  final String downloadUrl;
+  final bool isForceUpdate;
+  final String releaseNotes;
+
+  AppUpdateInfo({
+    required this.currentVersion,
+    required this.buildNumber,
+    required this.downloadUrl,
+    required this.isForceUpdate,
+    required this.releaseNotes,
+  });
+
+  factory AppUpdateInfo.fromJson(Map<String, dynamic> json) {
+    return AppUpdateInfo(
+      currentVersion: json['current_version'] ?? '1.0.0',
+      buildNumber: json['build_number'] ?? 1,
+      downloadUrl: json['download_url'] ?? '',
+      isForceUpdate: json['is_force_update'] ?? false,
+      releaseNotes: json['release_notes'] ?? '',
+    );
+  }
+}
+
+/// Gelişmiş Güncelleme Servisi
 ///
-/// Sorumluluklar:
-/// - Mevcut uygulama versiyonunu kontrol etme
-/// - Supabase'den en son versiyonu getirme
-/// - Semantik versiyon karşılaştırması
+/// Özellikler:
+/// - Build number karşılaştırması
+/// - Zorunlu güncelleme desteği
+/// - Release notes
+/// - Realtime listener
 class UpdateService {
   static final UpdateService _instance = UpdateService._internal();
   factory UpdateService() => _instance;
   UpdateService._internal();
 
-  SupabaseClient get _client => Supabase.instance.client;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
-  /// Mevcut uygulama versiyonunu al
-  Future<String> getCurrentVersion() async {
-    try {
-      final packageInfo = await PackageInfo.fromPlatform();
-      return packageInfo.version; // Örn: "1.0.0"
-    } catch (e) {
-      print('❌ Versiyon alma hatası: $e');
-      return '0.0.0';
-    }
+  StreamSubscription? _realtimeSubscription;
+  int? _currentBuildNumber;
+  BuildContext? _context;
+  bool _dialogShowing = false;
+
+  /// Servisi başlat ve context'i kaydet
+  Future<void> init(BuildContext context) async {
+    _context = context;
+
+    // Yerel build number'ı al
+    final packageInfo = await PackageInfo.fromPlatform();
+    _currentBuildNumber = int.tryParse(packageInfo.buildNumber) ?? 1;
+
+    print('📱 Uygulama Build: $_currentBuildNumber');
+
+    // İlk kontrol
+    await checkForUpdate();
+
+    // Realtime listener başlat
+    _startRealtimeListener();
   }
 
-  /// Güncelleme kontrolü - Varsa UpdateInfo dön, yoksa null
-  Future<UpdateInfo?> checkForUpdate() async {
+  /// Servisi kapat
+  void dispose() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
+  }
+
+  /// Güncelleme kontrolü yap
+  Future<AppUpdateInfo?> checkForUpdate() async {
     try {
-      print('🔍 Güncelleme kontrol ediliyor...');
-
-      // 1. Mevcut versiyon
-      final currentVersion = await getCurrentVersion();
-      print('   - Mevcut versiyon: $currentVersion');
-
-      // 2. Supabase'den en son versiyon
-      final response = await _client
-          .from('app_versions')
+      final response = await _supabase
+          .from('app_config')
           .select()
-          .order('created_at', ascending: false)
           .limit(1)
           .maybeSingle();
 
       if (response == null) {
-        print('   - Supabase\'de versiyon kaydı yok');
+        print('⚠️ app_config tablosunda kayıt yok');
         return null;
       }
 
-      final latestUpdate = UpdateInfo.fromJson(response);
-      print('   - Supabase versiyon: ${latestUpdate.versionNumber}');
+      final updateInfo = AppUpdateInfo.fromJson(response);
 
-      // 3. Versiyon karşılaştırması
-      if (_isNewerVersion(latestUpdate.versionNumber, currentVersion)) {
-        print('✅ Yeni güncelleme mevcut!');
-        print('   - Zorunlu: ${latestUpdate.forceUpdate}');
-        print('   - Mesaj: ${latestUpdate.updateMessage}');
-        return latestUpdate;
+      print('🌐 Sunucu Build: ${updateInfo.buildNumber}');
+
+      // Build number karşılaştır
+      if (_currentBuildNumber != null &&
+          updateInfo.buildNumber > _currentBuildNumber!) {
+        print(
+          '✅ Güncelleme mevcut: Build $_currentBuildNumber → ${updateInfo.buildNumber}',
+        );
+        _showUpdateDialog(updateInfo);
+        return updateInfo;
       } else {
-        print('✓ Uygulama güncel');
+        print('ℹ️ Uygulama güncel');
         return null;
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       print('❌ Güncelleme kontrolü hatası: $e');
-      print('Stack: $stackTrace');
       return null;
     }
   }
 
-  /// Semantik versiyon karşılaştırması
-  /// Returns: true if newVersion > currentVersion
-  bool _isNewerVersion(String newVersion, String currentVersion) {
+  /// Realtime listener - Tablo değiştiğinde otomatik kontrol
+  void _startRealtimeListener() {
+    _realtimeSubscription = _supabase
+        .from('app_config')
+        .stream(primaryKey: ['id'])
+        .listen((data) {
+          if (data.isNotEmpty) {
+            final updateInfo = AppUpdateInfo.fromJson(data.first);
+
+            if (_currentBuildNumber != null &&
+                updateInfo.buildNumber > _currentBuildNumber!) {
+              print('🔔 Realtime: Yeni güncelleme algılandı!');
+              _showUpdateDialog(updateInfo);
+            }
+          }
+        });
+
+    print('👂 Realtime listener başlatıldı');
+  }
+
+  /// Güncelleme dialogunu göster
+  void _showUpdateDialog(AppUpdateInfo updateInfo) {
+    if (_context == null || !_context!.mounted || _dialogShowing) return;
+
+    _dialogShowing = true;
+
+    showDialog(
+      context: _context!,
+      barrierDismissible: !updateInfo.isForceUpdate,
+      builder: (context) => AppUpdateDialog(updateInfo: updateInfo),
+    ).then((_) => _dialogShowing = false);
+  }
+}
+
+/// Modern Güncelleme Dialogu
+class AppUpdateDialog extends StatelessWidget {
+  final AppUpdateInfo updateInfo;
+
+  const AppUpdateDialog({super.key, required this.updateInfo});
+
+  Future<void> _launchUrl(BuildContext context) async {
     try {
-      final newParts = newVersion.split('.').map(int.parse).toList();
-      final currentParts = currentVersion.split('.').map(int.parse).toList();
-
-      // Eksik parçaları 0 ile doldur
-      while (newParts.length < 3) newParts.add(0);
-      while (currentParts.length < 3) currentParts.add(0);
-
-      // Major.Minor.Patch karşılaştırması
-      for (int i = 0; i < 3; i++) {
-        if (newParts[i] > currentParts[i]) {
-          return true; // Yeni versiyon daha büyük
-        } else if (newParts[i] < currentParts[i]) {
-          return false; // Mevcut versiyon daha büyük
-        }
-        // Eşitse bir sonraki kısmı kontrol et
-      }
-
-      return false; // Eşit versiyonlar
+      final uri = Uri.parse(updateInfo.downloadUrl);
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (e) {
-      print('⚠️ Versiyon karşılaştırma hatası: $e');
-
-      // Fallback: String karşılaştırması
-      return newVersion.compareTo(currentVersion) > 0;
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Bağlantı açılamadı: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
-  /// Versiyon bilgilerini formatlı string olarak dön
-  String formatVersion(String version) {
-    final parts = version.split('.');
-    if (parts.length == 3) {
-      return 'v${parts[0]}.${parts[1]}.${parts[2]}';
-    }
-    return 'v$version';
-  }
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !updateInfo.isForceUpdate,
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: updateInfo.isForceUpdate
+                      ? [Colors.red.shade400, Colors.orange.shade400]
+                      : [Colors.blue.shade400, Colors.purple.shade400],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.system_update,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Yeni Güncelleme Mevcut!',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    'v${updateInfo.currentVersion}',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (updateInfo.isForceUpdate)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber, color: Colors.red.shade700),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Bu güncelleme zorunludur. Devam etmek için güncelleme yapmalısınız.',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
-  /// İki versiyon arasındaki farkı açıkla
-  String getUpdateTypeDescription(String newVersion, String currentVersion) {
-    try {
-      final newParts = newVersion.split('.').map(int.parse).toList();
-      final currentParts = currentVersion.split('.').map(int.parse).toList();
-
-      while (newParts.length < 3) newParts.add(0);
-      while (currentParts.length < 3) currentParts.add(0);
-
-      if (newParts[0] > currentParts[0]) {
-        return 'Büyük Güncelleme'; // Major update
-      } else if (newParts[1] > currentParts[1]) {
-        return 'Yeni Özellikler'; // Minor update
-      } else if (newParts[2] > currentParts[2]) {
-        return 'Hata Düzeltmeleri'; // Patch update
-      }
-
-      return 'Güncelleme';
-    } catch (e) {
-      return 'Güncelleme';
-    }
+            if (updateInfo.releaseNotes.isNotEmpty) ...[
+              const Text(
+                'Yenilikler:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                constraints: const BoxConstraints(maxHeight: 150),
+                child: SingleChildScrollView(
+                  child: Text(
+                    updateInfo.releaseNotes,
+                    style: const TextStyle(fontSize: 14, height: 1.5),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          if (!updateInfo.isForceUpdate)
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Daha Sonra',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ),
+          ElevatedButton.icon(
+            onPressed: () => _launchUrl(context),
+            icon: const Icon(Icons.download),
+            label: const Text(
+              'Güncelle',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: updateInfo.isForceUpdate
+                  ? Colors.red
+                  : Colors.deepPurple,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
