@@ -134,7 +134,7 @@ jobs:
           
           # Supabase REST API ile PATCH isteği (id=1 olan satırı güncelle)
           HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
-            -X PATCH "${SUPABASE_URL}/rest/v1/app_config?id=eq.1" \
+            -X PATCH "${SUPABASE_URL}/rest/v1/app_config?id=eq.ea7ba3bf-f1c5-4361-becd-d5e42c62c975" \
             -H "apikey: ${SUPABASE_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_KEY}" \
             -H "Content-Type: application/json" \
