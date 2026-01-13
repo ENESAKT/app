@@ -26,10 +26,8 @@ jobs:
 
       - name: 📱 Setup Android SDK 36
         run: |
-          echo "=== Installing Android SDK 36 ==="
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" || echo "SDK 36 installation attempted"
-          echo "✅ SDK 36 ready"
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
 
       - name: 🐦 Setup Flutter (Stable)
         uses: subosito/flutter-action@v2
@@ -43,105 +41,30 @@ jobs:
           mkdir -p .dart_tool
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" > .env
           echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
-          echo "✅ Supabase secrets configured"
 
       - name: 📦 Get Flutter Dependencies
         working-directory: ./frontend
-        run: |
-          flutter --version
-          flutter pub get
-          flutter pub upgrade
+        run: flutter pub get
 
       - name: 🔐 Decode Release Keystore
         run: |
-          echo "════════════════════════════════════════════════════════"
-          echo "🔐 Decoding Release Keystore"
-          echo "════════════════════════════════════════════════════════"
-          echo "📁 Current directory: $(pwd)"
-          
-          # TAM PATH ile keystore oluştur
           echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\r\n\t ' | base64 --decode > frontend/android/app/upload-keystore.jks
-          
-          # Dosya kontrolü
-          if [ -f frontend/android/app/upload-keystore.jks ]; then
-            SIZE=$(stat -c%s frontend/android/app/upload-keystore.jks 2>/dev/null || stat -f%z frontend/android/app/upload-keystore.jks)
-            echo "✅ Keystore created: frontend/android/app/upload-keystore.jks"
-            echo "📊 Size: $SIZE bytes"
-          else
-            echo "❌ ERROR: Failed to create keystore!"
-            exit 1
-          fi
-          echo "════════════════════════════════════════════════════════"
+          ls -lh frontend/android/app/upload-keystore.jks
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-
-      - name: 🔍 Verify Keystore Location
-        run: |
-          echo "════════════════════════════════════════════════════════"
-          echo "🔍 Verifying Keystore"
-          echo "════════════════════════════════════════════════════════"
-          echo " Listing frontend/android/app/:"
-          ls -lah frontend/android/app/ | grep -E "upload-keystore|build.gradle"
-          echo "════════════════════════════════════════════════════════"
-
-      - name:  Debug Signing Configuration
-        working-directory: ./frontend/android
-        run: |
-          echo "════════════════════════════════════════════════════════"
-          echo "🔍 Running Gradle Diagnostics"
-          echo "════════════════════════════════════════════════════════"
-          echo "📁 Current directory: $(pwd)"
-          
-          # Global gradle kullan (gradlew yerine)
-          gradle printSigningConfig
-          
-          echo "════════════════════════════════════════════════════════"
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: 🔧 Build APK (Release)
         working-directory: ./frontend
         run: |
-          echo "════════════════════════════════════════════════════════"
-          echo "🔧 Building Release APK"
-          echo "════════════════════════════════════════════════════════"
-          echo "📁 Current directory: $(pwd)"
-          
           flutter build apk --release \
-            --no-tree-shake-icons \
-            --verbose \
             --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
             --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
-          
-          echo "════════════════════════════════════════════════════════"
-          echo "✅ Build Completed"
-          echo "════════════════════════════════════════════════════════"
-          
-          if [ -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
-            echo "✅ APK created successfully!"
-            ls -lh build/app/outputs/flutter-apk/app-release.apk
-          else
-            echo "❌ APK not found!"
-            exit 1
-          fi
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-
-      - name: 📊 Upload Build Logs (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-failure-logs
-          path: |
-            frontend/build/**/*.log
-            ~/.gradle/daemon/*/daemon-*.out.log
-          retention-days: 5
 
       - name: 📦 Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -153,7 +76,7 @@ jobs:
       - name: 📋 Get Version Info
         id: version
         run: |
-          if [ -n "$GITHUB_REF" ] && [[ "$GITHUB_REF" == refs/tags/* ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             VERSION=${GITHUB_REF#refs/tags/v}
             TAG=${GITHUB_REF#refs/tags/}
           else
@@ -162,7 +85,6 @@ jobs:
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "date=$(date +'%Y-%m-%d %H:%M')" >> $GITHUB_OUTPUT
 
       - name: 🏷️ Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -173,11 +95,6 @@ jobs:
           body: |
             ## 🚀 Project-Friend v${{ steps.version.outputs.version }}
             
-            ### 📱 Uygulama Güncellemesi
-            **Sürüm:** ${{ steps.version.outputs.version }}  
-            **Tarih:** ${{ steps.version.outputs.date }}  
-            **Build:** #${{ github.run_number }}
-            
             ### 📥 Kurulum
             1. APK dosyasını indirin
             2. Telefonunuzda "Bilinmeyen Kaynaklardan Kurulum" aktif olmalı
@@ -187,11 +104,3 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: ✅ Build Success
-        run: |
-          echo "════════════════════════════════════════════════════════"
-          echo "✅ APK Build Successful!"
-          echo "📦 APK: frontend/build/app/outputs/flutter-apk/app-release.apk"
-          echo "🔗 Workflow: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          echo "════════════════════════════════════════════════════════"
