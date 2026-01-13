@@ -53,7 +53,24 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
-      - name: 🔧 Build APK (Release)
+      - name: � Update pubspec.yaml Version from Tag
+        if: startsWith(github.ref, 'refs/tags/')
+        working-directory: ./frontend
+        run: |
+          # Tag'den versiyon al (v1.0.7 -> 1.0.7)
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          BUILD_NUMBER="${{ github.run_number }}"
+          
+          echo "📌 Updating pubspec.yaml version to: ${VERSION}+${BUILD_NUMBER}"
+          
+          # pubspec.yaml'daki version satırını güncelle
+          sed -i "s/^version: .*/version: ${VERSION}+${BUILD_NUMBER}/" pubspec.yaml
+          
+          # Doğrulama
+          grep "^version:" pubspec.yaml
+
+      - name: �🔧 Build APK (Release)
         working-directory: ./frontend
         run: |
           flutter build apk --release \
