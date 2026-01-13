@@ -85,47 +85,14 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
-      - name: 🔍 Verify Signing Environment Variables
-        run: |
-          echo "════════════════════════════════════════════════════════"
-          echo "� Verifying Signing Configuration"
-          echo "════════════════════════════════════════════════════════"
-          
-          # Environment variable'ların varlığını kontrol et (değerlerini gösterme!)
-          if [ -z "$KEYSTORE_PASSWORD" ]; then
-            echo "❌ KEYSTORE_PASSWORD is NOT set!"
-            exit 1
-          else
-            echo "✅ KEYSTORE_PASSWORD is set (length: ${#KEYSTORE_PASSWORD})"
-          fi
-          
-          if [ -z "$KEY_ALIAS" ]; then
-            echo "❌ KEY_ALIAS is NOT set!"
-            exit 1
-          else
-            echo "✅ KEY_ALIAS is set: $KEY_ALIAS"
-          fi
-          
-          if [ -z "$KEY_PASSWORD" ]; then
-            echo "❌ KEY_PASSWORD is NOT set!"
-            exit 1
-          else
-            echo "✅ KEY_PASSWORD is set (length: ${#KEY_PASSWORD})"
-          fi
-          
-          echo "════════════════════════════════════════════════════════"
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-
-      - name: �🔧 Build APK (Release)
+      - name:  Build APK (Release)
         working-directory: ./frontend
         run: |
           echo "════════════════════════════════════════════════════════"
           echo "🔧 Starting Flutter Release Build"
           echo "════════════════════════════════════════════════════════"
           
+          # Gradle'a environment variables aktarılacak
           flutter build apk --release \
             --no-tree-shake-icons \
             --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
@@ -137,7 +104,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          # Gradle signing için gerekli environment variables
+          # 🔐 Gradle bu environment variables'ları System.getenv() ile okuyacak
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
