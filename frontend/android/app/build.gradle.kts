@@ -1,4 +1,5 @@
-// Build tetikleme denemesi
+import java.util.Properties
+import java.io.FileInputStream
 
 plugins {
     id("com.android.application")
@@ -12,15 +13,13 @@ android {
 
     // 🔐 Keystore Properties (GitHub Secrets veya lokal key.properties)
     val keystorePropertiesFile = rootProject.file("key.properties")
-    val keystoreProperties = java.util.Properties()
+    val keystoreProperties = Properties()
     if (keystorePropertiesFile.exists()) {
-        keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))
+        keystoreProperties.load(FileInputStream(keystorePropertiesFile))
     }
 
-    // ✅ GÜNCELLEME: SDK 36 (Plugins require this)
+    // ✅ SDK Ayarları
     compileSdk = 36
-
-    // NDK version
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -32,7 +31,7 @@ android {
         jvmTarget = "17"
     }
 
-    // 🔐 Signing Configurations
+    // 🔐 Signing Configurations (İmzalama Ayarları)
     signingConfigs {
         create("release") {
             keyAlias = keystoreProperties.getProperty("keyAlias") ?: System.getenv("KEY_ALIAS")
@@ -44,38 +43,27 @@ android {
 
     defaultConfig {
         applicationId = "com.friendapp.frontend"
-
         minSdk = flutter.minSdkVersion
         targetSdk = 36 
-
         versionCode = 1
         versionName = "1.0"
         
-        // ✅ MultiDex support (Supabase + Firebase = many methods)
+        // MultiDex support
         multiDexEnabled = true
     }
 
     buildTypes {
-        // ✅ DEBUG BUILD TYPE - ProGuard KAPALI
         debug {
-            isMinifyEnabled = false
-            isShrinkResources = false
-            isDebuggable = true
-            
-            // Debug için signing (development)
             signingConfig = signingConfigs.getByName("debug")
         }
         
-        // ✅ RELEASE BUILD TYPE - ProGuard AÇIK + Release Keystore
         release {
             // ✅ PRODUCTION KEYSTORE ile imzala
             signingConfig = signingConfigs.getByName("release")
             
-            // Enable code shrinking, obfuscation, and optimization
             isMinifyEnabled = true
             isShrinkResources = true
             
-            // ProGuard rules to protect Supabase, Firebase, and Flutter
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
