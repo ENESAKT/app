@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_provider.dart';
 
-/// Login Ekranı - Google ve E-posta ile giriş
+/// Login Ekranı - Supabase Native Auth
+/// Google OAuth ve E-posta ile giriş
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -24,6 +25,14 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  Future<void> _signInWithGoogle() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    await auth.signInWithGoogle();
+
+    // OAuth akışı external browser'da devam edecek
+    // Auth state listener tarafından yakalanacak
+  }
+
   Future<void> _signInWithEmail() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -34,12 +43,8 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     if (success && mounted) {
-      // E-posta doğrulanmış mı kontrol et
-      if (auth.isEmailVerified) {
-        Navigator.pushReplacementNamed(context, '/home');
-      } else {
-        Navigator.pushReplacementNamed(context, '/verify-email');
-      }
+      // Ana sayfaya yönlendir
+      Navigator.pushReplacementNamed(context, '/home');
     }
   }
 
@@ -96,373 +101,29 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 48),
 
-                  // Google Giriş veya E-posta Giriş
+                  // Auth content
                   Consumer<AuthProvider>(
                     builder: (context, auth, _) {
                       if (auth.isLoading) {
-                        return Column(
-                          children: [
-                            const CircularProgressIndicator(
-                              color: Colors.white,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Giriş yapılıyor...',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.9),
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        );
+                        return _buildLoadingState();
                       }
 
                       return Column(
                         children: [
-                          // Hata mesajı göster
-                          if (auth.error != null) ...[
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              margin: const EdgeInsets.only(bottom: 20),
-                              decoration: BoxDecoration(
-                                color: Colors.red[400],
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.error_outline,
-                                    color: Colors.white,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      auth.error!,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                          // Hata mesajı
+                          if (auth.error != null) _buildErrorCard(auth.error!),
 
-                          // Google ile Giriş Butonu
+                          // Google ile Giriş veya E-posta Giriş
                           if (!_showEmailLogin) ...[
-                            ElevatedButton(
-                              onPressed: auth.isLoading
-                                  ? null
-                                  : () async {
-                                      final success = await auth
-                                          .signInWithGoogle();
-                                      if (!mounted) return;
-
-                                      if (success) {
-                                        Navigator.pushReplacementNamed(
-                                          context,
-                                          '/home',
-                                        );
-                                      } else {
-                                        // Hata mesajı zaten auth.error'da, UI otomatik güncellenecek
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              auth.error ?? 'Giriş başarısız',
-                                            ),
-                                            backgroundColor: Colors.red,
-                                            duration: const Duration(
-                                              seconds: 4,
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                    },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: Colors.grey[800],
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 32,
-                                  vertical: 16,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(30),
-                                ),
-                                elevation: 5,
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Image.network(
-                                    'https://www.google.com/favicon.ico',
-                                    height: 24,
-                                    errorBuilder: (_, __, ___) => const Icon(
-                                      Icons.g_mobiledata,
-                                      size: 24,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  const Text(
-                                    'Google ile Giriş Yap',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            _buildGoogleButton(auth),
                             const SizedBox(height: 20),
-
-                            // Ayırıcı
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Container(
-                                    height: 1,
-                                    color: Colors.white.withOpacity(0.3),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  child: Text(
-                                    'veya',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.8),
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Container(
-                                    height: 1,
-                                    color: Colors.white.withOpacity(0.3),
-                                  ),
-                                ),
-                              ],
-                            ),
+                            _buildDivider(),
                             const SizedBox(height: 20),
-
-                            // E-posta ile giriş butonu
-                            OutlinedButton.icon(
-                              onPressed: () =>
-                                  setState(() => _showEmailLogin = true),
-                              icon: const Icon(
-                                Icons.email,
-                                color: Colors.white,
-                              ),
-                              label: const Text(
-                                'E-posta ile Giriş',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: Colors.white),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 32,
-                                  vertical: 16,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(30),
-                                ),
-                              ),
-                            ),
+                            _buildEmailToggleButton(),
                           ],
 
                           // E-posta Giriş Formu
-                          if (_showEmailLogin) ...[
-                            Form(
-                              key: _formKey,
-                              child: Column(
-                                children: [
-                                  // Geri butonu
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: TextButton.icon(
-                                      onPressed: () => setState(
-                                        () => _showEmailLogin = false,
-                                      ),
-                                      icon: const Icon(
-                                        Icons.arrow_back,
-                                        color: Colors.white,
-                                        size: 20,
-                                      ),
-                                      label: const Text(
-                                        'Geri',
-                                        style: TextStyle(color: Colors.white),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-
-                                  // E-posta alanı
-                                  TextFormField(
-                                    controller: _emailController,
-                                    keyboardType: TextInputType.emailAddress,
-                                    style: const TextStyle(color: Colors.white),
-                                    decoration: InputDecoration(
-                                      labelText: 'E-posta',
-                                      labelStyle: TextStyle(
-                                        color: Colors.white.withOpacity(0.8),
-                                      ),
-                                      prefixIcon: const Icon(
-                                        Icons.email,
-                                        color: Colors.white70,
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: BorderSide(
-                                          color: Colors.white.withOpacity(0.5),
-                                        ),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                          color: Colors.white,
-                                          width: 2,
-                                        ),
-                                      ),
-                                      errorBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                          color: Colors.redAccent,
-                                        ),
-                                      ),
-                                      focusedErrorBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                          color: Colors.redAccent,
-                                          width: 2,
-                                        ),
-                                      ),
-                                      filled: true,
-                                      fillColor: Colors.white.withOpacity(0.1),
-                                    ),
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'E-posta gerekli';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 16),
-
-                                  // Şifre alanı
-                                  TextFormField(
-                                    controller: _passwordController,
-                                    obscureText: _obscurePassword,
-                                    style: const TextStyle(color: Colors.white),
-                                    decoration: InputDecoration(
-                                      labelText: 'Şifre',
-                                      labelStyle: TextStyle(
-                                        color: Colors.white.withOpacity(0.8),
-                                      ),
-                                      prefixIcon: const Icon(
-                                        Icons.lock,
-                                        color: Colors.white70,
-                                      ),
-                                      suffixIcon: IconButton(
-                                        icon: Icon(
-                                          _obscurePassword
-                                              ? Icons.visibility
-                                              : Icons.visibility_off,
-                                          color: Colors.white70,
-                                        ),
-                                        onPressed: () => setState(
-                                          () => _obscurePassword =
-                                              !_obscurePassword,
-                                        ),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: BorderSide(
-                                          color: Colors.white.withOpacity(0.5),
-                                        ),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                          color: Colors.white,
-                                          width: 2,
-                                        ),
-                                      ),
-                                      errorBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                          color: Colors.redAccent,
-                                        ),
-                                      ),
-                                      focusedErrorBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                          color: Colors.redAccent,
-                                          width: 2,
-                                        ),
-                                      ),
-                                      filled: true,
-                                      fillColor: Colors.white.withOpacity(0.1),
-                                    ),
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'Şifre gerekli';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 24),
-
-                                  // Giriş butonu
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: ElevatedButton(
-                                      onPressed: _signInWithEmail,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.white,
-                                        foregroundColor: const Color(
-                                          0xFF667eea,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            30,
-                                          ),
-                                        ),
-                                      ),
-                                      child: const Text(
-                                        'Giriş Yap',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-
-                          // Hata mesajı
-                          if (auth.error != null) ...[
-                            const SizedBox(height: 16),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                auth.error!,
-                                style: const TextStyle(color: Colors.white),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ],
+                          if (_showEmailLogin) _buildEmailForm(),
 
                           const SizedBox(height: 24),
 
@@ -489,6 +150,210 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Column(
+      children: [
+        const CircularProgressIndicator(color: Colors.white),
+        const SizedBox(height: 16),
+        Text(
+          'Sunucuya bağlanılıyor...',
+          style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 16),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildErrorCard(String error) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.red[400],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.white),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              error,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGoogleButton(AuthProvider auth) {
+    return ElevatedButton(
+      onPressed: auth.isLoading ? null : _signInWithGoogle,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.grey[800],
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+        elevation: 5,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.network(
+            'https://www.google.com/favicon.ico',
+            height: 24,
+            errorBuilder: (_, __, ___) =>
+                const Icon(Icons.g_mobiledata, size: 24),
+          ),
+          const SizedBox(width: 12),
+          const Text(
+            'Google ile Giriş Yap',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDivider() {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(height: 1, color: Colors.white.withOpacity(0.3)),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'veya',
+            style: TextStyle(color: Colors.white.withOpacity(0.8)),
+          ),
+        ),
+        Expanded(
+          child: Container(height: 1, color: Colors.white.withOpacity(0.3)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmailToggleButton() {
+    return OutlinedButton.icon(
+      onPressed: () => setState(() => _showEmailLogin = true),
+      icon: const Icon(Icons.email, color: Colors.white),
+      label: const Text(
+        'E-posta ile Giriş',
+        style: TextStyle(color: Colors.white),
+      ),
+      style: OutlinedButton.styleFrom(
+        side: const BorderSide(color: Colors.white),
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+      ),
+    );
+  }
+
+  Widget _buildEmailForm() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        children: [
+          // Geri butonu
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _showEmailLogin = false),
+              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+              label: const Text('Geri', style: TextStyle(color: Colors.white)),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // E-posta alanı
+          TextFormField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            style: const TextStyle(color: Colors.white),
+            decoration: _inputDecoration('E-posta', Icons.email),
+            validator: (value) {
+              if (value == null || value.isEmpty) return 'E-posta gerekli';
+              if (!value.contains('@')) return 'Geçerli bir e-posta girin';
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // Şifre alanı
+          TextFormField(
+            controller: _passwordController,
+            obscureText: _obscurePassword,
+            style: const TextStyle(color: Colors.white),
+            decoration: _inputDecoration('Şifre', Icons.lock).copyWith(
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                  color: Colors.white70,
+                ),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) return 'Şifre gerekli';
+              if (value.length < 6) return 'Şifre en az 6 karakter olmalı';
+              return null;
+            },
+          ),
+          const SizedBox(height: 24),
+
+          // Giriş butonu
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _signInWithEmail,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF667eea),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
+              ),
+              child: const Text(
+                'Giriş Yap',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
+      prefixIcon: Icon(icon, color: Colors.white70),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.white.withOpacity(0.5)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.white, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.redAccent),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+      ),
+      filled: true,
+      fillColor: Colors.white.withOpacity(0.1),
     );
   }
 }

@@ -27,7 +27,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     timeago.setLocaleMessages('tr', timeago.TrMessages());
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    _currentUserId = auth.firebaseUser?.uid;
+    _currentUserId = auth.userId; // Supabase UUID
 
     if (_currentUserId != null) {
       _loadConversations();

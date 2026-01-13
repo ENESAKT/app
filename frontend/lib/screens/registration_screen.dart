@@ -53,44 +53,35 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Profil fotoğrafı zorunlu
-    if (_profilePhoto == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Lütfen bir profil fotoğrafı seçin'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+    // Profil fotoğrafı artık opsiyonel (Supabase'de sonra eklenebilir)
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
 
     print('🚀 Kayıt formu gönderiliyor...');
 
-    final success = await auth.registerWithEmail(
+    // Supabase Native Auth - signUpWithEmail
+    final success = await auth.signUpWithEmail(
       email: _emailController.text.trim(),
       password: _passwordController.text,
       firstName: _firstNameController.text.trim(),
       lastName: _lastNameController.text.trim(),
-      profilePhoto: _profilePhoto,
     );
 
     if (!mounted) return;
 
     if (success) {
-      // Başarılı - email doğrulama ekranına yönlendir
-      print('✅ Kayıt başarılı, email doğrulama ekranına yönlendiriliyor...');
+      // Başarılı - ana sayfaya yönlendir (Supabase email onayı backend'de yapılır)
+      print('✅ Kayıt başarılı, ana sayfaya yönlendiriliyor...');
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Kayıt başarılı! E-posta adresinizi kontrol edin.'),
+          content: Text('Kayıt başarılı! Hoşgeldiniz.'),
           backgroundColor: Colors.green,
           duration: Duration(seconds: 3),
         ),
       );
 
-      Navigator.pushReplacementNamed(context, '/verify-email');
+      Navigator.pushReplacementNamed(context, '/home');
     } else {
       // Hata - kullanıcıya göster
       print('❌ Kayıt başarısız: ${auth.error}');

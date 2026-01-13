@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_provider.dart';
-import '../models/models.dart';
 
-/// Admin Panel - Bekleyen arkadaşlık isteklerini onaylama/reddetme
+/// Admin Panel - Tüm Kullanıcılar Listesi (Supabase Native)
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
 
@@ -13,26 +13,50 @@ class AdminPanelScreen extends StatefulWidget {
 }
 
 class _AdminPanelScreenState extends State<AdminPanelScreen> {
-  List<FriendRequest> _pendingRequests = [];
+  final SupabaseClient _supabase = Supabase.instance.client;
+
+  List<Map<String, dynamic>> _users = [];
   bool _isLoading = true;
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _loadPendingRequests();
+    _loadUsers();
   }
 
-  Future<void> _loadPendingRequests() async {
+  Future<void> _loadUsers() async {
     setState(() => _isLoading = true);
-    
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+
     try {
-      _pendingRequests = await auth.apiService.getPendingRequests();
+      // users tablosundan tüm kullanıcıları çek
+      final response = await _supabase
+          .from('users')
+          .select(
+            'id, username, email, avatar_url, first_name, last_name, is_online, is_admin, created_at',
+          )
+          .order('created_at', ascending: false)
+          .limit(100);
+
+      setState(() {
+        _users = List<Map<String, dynamic>>.from(response);
+        _isLoading = false;
+      });
     } catch (e) {
-      // Handle error
+      print('❌ Kullanıcıları yükleme hatası: $e');
+      setState(() => _isLoading = false);
     }
-    
-    setState(() => _isLoading = false);
+  }
+
+  List<Map<String, dynamic>> get _filteredUsers {
+    if (_searchQuery.isEmpty) return _users;
+
+    return _users.where((user) {
+      final username = (user['username'] ?? '').toString().toLowerCase();
+      final email = (user['email'] ?? '').toString().toLowerCase();
+      final query = _searchQuery.toLowerCase();
+      return username.contains(query) || email.contains(query);
+    }).toList();
   }
 
   @override
@@ -43,14 +67,43 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         backgroundColor: const Color(0xFF764ba2),
         foregroundColor: Colors.white,
         elevation: 0,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: _buildSearchBar(),
+        ),
       ),
       body: RefreshIndicator(
-        onRefresh: _loadPendingRequests,
+        onRefresh: _loadUsers,
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
-            : _pendingRequests.isEmpty
-                ? _buildEmptyState()
-                : _buildRequestsList(),
+            : _filteredUsers.isEmpty
+            ? _buildEmptyState()
+            : _buildUsersList(),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: TextField(
+        onChanged: (value) => setState(() => _searchQuery = value),
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          hintText: 'Kullanıcı ara...',
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+          prefixIcon: Icon(Icons.search, color: Colors.white.withOpacity(0.7)),
+          filled: true,
+          fillColor: Colors.white.withOpacity(0.2),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+        ),
       ),
     );
   }
@@ -60,224 +113,186 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.check_circle_outline,
-            size: 80,
-            color: Colors.green[400],
-          ),
+          Icon(Icons.people_outline, size: 80, color: Colors.grey[400]),
           const SizedBox(height: 16),
           Text(
-            'Bekleyen istek yok',
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Tüm arkadaşlık istekleri işlendi',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
-            ),
+            _searchQuery.isEmpty
+                ? 'Kullanıcı bulunamadı'
+                : 'Arama sonucu bulunamadı',
+            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildRequestsList() {
+  Widget _buildUsersList() {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _pendingRequests.length,
+      itemCount: _filteredUsers.length,
       itemBuilder: (context, index) {
-        final request = _pendingRequests[index];
-        
-        return Card(
-          margin: const EdgeInsets.only(bottom: 16),
-          elevation: 3,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Gönderen ve Alıcı
-                Row(
-                  children: [
-                    // Gönderen
-                    _buildUserAvatar(request.sender),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            request.sender.fullName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                          Text(
-                            'Gönderen',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.arrow_forward, color: Colors.grey),
-                    const SizedBox(width: 8),
-                    // Alıcı
-                    _buildUserAvatar(request.receiver),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            request.receiver.fullName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                          Text(
-                            'Alıcı',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                
-                // Not
-                if (request.note.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.note, size: 18, color: Colors.grey[600]),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            request.note,
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                
-                // Tarih
-                const SizedBox(height: 12),
-                Text(
-                  'Talep tarihi: ${_formatDate(request.createdAt)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                  ),
-                ),
-                
-                // Aksiyon butonları
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _rejectRequest(request),
-                        icon: const Icon(Icons.close, color: Colors.red),
-                        label: const Text('Reddet'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _approveRequest(request),
-                        icon: const Icon(Icons.check),
-                        label: const Text('Onayla'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
+        final user = _filteredUsers[index];
+        return _buildUserCard(user);
       },
     );
   }
 
-  Widget _buildUserAvatar(User user) {
-    return CircleAvatar(
-      radius: 24,
-      backgroundImage: user.profilePhoto != null
-          ? CachedNetworkImageProvider(user.profilePhoto!)
-          : null,
-      child: user.profilePhoto == null
-          ? Text(
-              user.fullName.isNotEmpty 
-                  ? user.fullName[0].toUpperCase() 
-                  : '?',
-              style: const TextStyle(fontSize: 16),
-            )
-          : null,
+  Widget _buildUserCard(Map<String, dynamic> user) {
+    final username = user['username'] ?? 'Bilinmeyen';
+    final email = user['email'] ?? '';
+    final avatarUrl = user['avatar_url'];
+    final firstName = user['first_name'] ?? '';
+    final lastName = user['last_name'] ?? '';
+    final isOnline = user['is_online'] ?? false;
+    final isAdmin = user['is_admin'] ?? false;
+    final createdAt = DateTime.tryParse(user['created_at'] ?? '');
+
+    final fullName = '$firstName $lastName'.trim();
+    final displayName = fullName.isNotEmpty ? fullName : username;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(12),
+        leading: Stack(
+          children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: Colors.grey[200],
+              backgroundImage: avatarUrl != null
+                  ? CachedNetworkImageProvider(avatarUrl)
+                  : null,
+              child: avatarUrl == null
+                  ? Text(
+                      displayName.isNotEmpty
+                          ? displayName[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                  : null,
+            ),
+            // Online indicator
+            if (isOnline)
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(
+                displayName,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (isAdmin) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.purple,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'ADMIN',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '@$username',
+              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+            ),
+            if (createdAt != null)
+              Text(
+                'Katılım: ${_formatDate(createdAt)}',
+                style: TextStyle(color: Colors.grey[500], fontSize: 11),
+              ),
+          ],
+        ),
+        trailing: PopupMenuButton<String>(
+          onSelected: (action) => _handleUserAction(action, user),
+          itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'view',
+              child: Row(
+                children: [
+                  Icon(Icons.person, size: 20),
+                  SizedBox(width: 8),
+                  Text('Profili Görüntüle'),
+                ],
+              ),
+            ),
+            const PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(Icons.delete, size: 20, color: Colors.red),
+                  SizedBox(width: 8),
+                  Text('Kullanıcıyı Sil', style: TextStyle(color: Colors.red)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        isThreeLine: true,
+      ),
     );
   }
 
-  Future<void> _approveRequest(FriendRequest request) async {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final success = await auth.apiService.approveRequest(request.id);
-    
-    if (success) {
-      _loadPendingRequests();
-      if (mounted) {
+  void _handleUserAction(String action, Map<String, dynamic> user) {
+    switch (action) {
+      case 'view':
+        // TODO: Navigate to profile
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${request.sender.fullName} ve ${request.receiver.fullName} artık arkadaş!'),
-            backgroundColor: Colors.green,
-          ),
+          SnackBar(content: Text('Profil görüntüleme: ${user['username']}')),
         );
-      }
+        break;
+      case 'delete':
+        _deleteUser(user);
+        break;
     }
   }
 
-  Future<void> _rejectRequest(FriendRequest request) async {
+  Future<void> _deleteUser(Map<String, dynamic> user) async {
+    final username = user['username'] ?? 'Kullanıcı';
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('İsteği Reddet'),
-        content: Text('${request.sender.fullName} tarafından gönderilen isteği reddetmek istiyor musunuz?'),
+        title: const Text('Kullanıcıyı Sil'),
+        content: Text(
+          '$username kullanıcısını silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -286,23 +301,37 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Reddet'),
+            child: const Text('Sil'),
           ),
         ],
       ),
     );
 
     if (confirm == true) {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      final success = await auth.apiService.rejectRequest(request.id);
-      
-      if (success) {
-        _loadPendingRequests();
+      try {
+        final userId = user['id'];
+
+        // Supabase'den kullanıcıyı sil
+        await _supabase.from('users').delete().eq('id', userId);
+
+        // Listeyi yenile
+        _loadUsers();
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('İstek reddedildi'),
-              backgroundColor: Colors.orange,
+            SnackBar(
+              content: Text('$username silindi'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        print('❌ Kullanıcı silme hatası: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Silme hatası: $e'),
+              backgroundColor: Colors.red,
             ),
           );
         }
@@ -311,6 +340,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   }
 
   String _formatDate(DateTime date) {
-    return '${date.day}.${date.month}.${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+    return '${date.day}.${date.month}.${date.year}';
   }
 }

@@ -357,7 +357,7 @@ class _ProfilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
-    final userId = auth.firebaseUser?.uid;
+    final userId = auth.userId; // Supabase UUID
 
     if (userId == null) {
       return const Center(child: Text('Kullanıcı bulunamadı'));

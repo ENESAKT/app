@@ -41,7 +41,7 @@ class _SearchScreenState extends State<SearchScreen> {
     setState(() => _isSearching = true);
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final currentUserId = auth.firebaseUser?.uid;
+    final currentUserId = auth.userId; // Supabase UUID
 
     if (currentUserId == null) return;
 
@@ -83,7 +83,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<void> _sendFriendRequest(String userId) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final currentUserId = auth.firebaseUser?.uid;
+    final currentUserId = auth.userId; // Supabase UUID
     if (currentUserId == null) return;
 
     try {

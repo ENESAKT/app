@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,7 +13,6 @@ import 'screens/conversations_screen.dart';
 import 'screens/admin_panel_screen.dart';
 import 'screens/blocked_users_screen.dart';
 import 'screens/registration_screen.dart';
-import 'screens/email_verification_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/friends_screen.dart';
 import 'screens/seed_data_screen.dart'; // DEV ONLY
@@ -23,11 +21,7 @@ import 'widgets/smart_loading_widget.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase initialization
-  await Firebase.initializeApp();
-
-  // Supabase initialization
-  // TODO: Supabase projenizi oluşturduktan sonra bu bilgileri güncelleyin
+  // Supabase initialization (Firebase KALDIRILDI)
   await Supabase.initialize(
     url: 'https://bmcbzkkewskuibojxvud.supabase.co',
     anonKey: 'sb_publishable_Ml7r3_OXOW2Tk_yOwm3TBQ_CUU1MTat',
@@ -114,7 +108,6 @@ class MyApp extends StatelessWidget {
           '/settings': (context) => const SettingsScreen(),
           '/admin': (context) => const AdminPanelScreen(),
           '/blocked': (context) => const BlockedUsersScreen(),
-          '/verify-email': (context) => const EmailVerificationScreen(),
           '/seed': (context) =>
               const SeedDataScreen(), // DEV ONLY - Remove in production
         },

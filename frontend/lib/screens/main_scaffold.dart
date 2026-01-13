@@ -50,10 +50,8 @@ class _MainScaffoldState extends State<MainScaffold> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateService.init(context);
 
-      final userId = Provider.of<AuthProvider>(
-        context,
-        listen: false,
-      ).firebaseUser?.uid;
+      // Supabase user ID (UUID formatında)
+      final userId = Provider.of<AuthProvider>(context, listen: false).userId;
       if (userId != null) {
         _notificationService.startListening(userId);
       }
@@ -203,7 +201,8 @@ class _ProfileWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
-    final userId = auth.firebaseUser?.uid;
+    // Supabase user ID (UUID formatında)
+    final userId = auth.userId;
 
     if (userId == null) {
       return const Center(child: Text('Kullanıcı bulunamadı'));

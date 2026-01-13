@@ -42,7 +42,7 @@ class _FriendsScreenState extends State<FriendsScreen>
     setState(() => _isLoading = true);
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final userId = auth.firebaseUser?.uid;
+    final userId = auth.userId; // Supabase UUID
 
     if (userId == null) {
       setState(() => _isLoading = false);
