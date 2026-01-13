@@ -73,23 +73,32 @@ class UpdateService {
     _realtimeSubscription = null;
   }
 
-  /// Güncelleme kontrolü yap
+  /// Güncelleme kontrolü yap (10 saniye timeout)
   Future<AppUpdateInfo?> checkForUpdate() async {
     try {
+      // 10 saniye timeout ile sorgu
       final response = await _supabase
           .from('app_config')
           .select()
           .limit(1)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              print('⚠️ Güncelleme kontrolü timeout (10s)');
+              return null;
+            },
+          );
 
       if (response == null) {
-        print('⚠️ app_config tablosunda kayıt yok');
+        print('⚠️ app_config tablosunda kayıt yok veya timeout');
         return null;
       }
 
       final updateInfo = AppUpdateInfo.fromJson(response);
 
       print('🌐 Sunucu Build: ${updateInfo.buildNumber}');
+      print('📱 Yerel Build: $_currentBuildNumber');
 
       // Build number karşılaştır
       if (_currentBuildNumber != null &&
@@ -100,7 +109,7 @@ class UpdateService {
         _showUpdateDialog(updateInfo);
         return updateInfo;
       } else {
-        print('ℹ️ Uygulama güncel');
+        print('ℹ️ Uygulama güncel (Build $_currentBuildNumber)');
         return null;
       }
     } catch (e) {

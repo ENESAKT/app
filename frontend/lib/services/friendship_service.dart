@@ -14,7 +14,7 @@ class FriendshipService {
 
   SupabaseClient get _client => Supabase.instance.client;
 
-  /// Kullanıcı ara (username veya email ile)
+  /// Kullanıcı ara (username veya email ile) - 10s timeout
   Future<List<Map<String, dynamic>>> searchUsers({
     required String query,
     required String currentUserId,
@@ -24,19 +24,27 @@ class FriendshipService {
 
       print('🔍 Kullanıcı aranıyor: $query');
 
-      // Username veya email'de ara (case-insensitive)
+      // Username veya email'de ara (case-insensitive) - 10 saniye timeout
       final response = await _client
           .from('users')
-          .select()
+          .select('id, username, avatar_url, bio, is_online')
           .neq('id', currentUserId) // Kendisi hariç
           .or('username.ilike.%$query%,email.ilike.%$query%')
-          .limit(20);
+          .limit(20)
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              print('⚠️ Kullanıcı arama timeout (10s)');
+              return [];
+            },
+          );
 
       print('✅ ${response.length} kullanıcı bulundu');
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       print('❌ Arama hatası: $e');
-      throw Exception('Kullanıcı araması başarısız: $e');
+      // Timeout veya ağ hatası durumunda boş liste döndür, uygulama çökmesin
+      return [];
     }
   }
 
