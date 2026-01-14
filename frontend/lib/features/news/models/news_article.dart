@@ -30,13 +30,38 @@ class NewsArticle {
       title: json['title'] ?? 'Başlık Yok',
       description: json['description'],
       content: json['content'],
-      urlToImage: json['urlToImage'],
+      urlToImage: json['urlToImage'] ?? json['image'],
       url: json['url'] ?? '',
-      source: json['source']?['name'] ?? 'Bilinmeyen Kaynak',
+      source:
+          json['source']?['name'] ??
+          json['source']?['title'] ??
+          'Bilinmeyen Kaynak',
       sourceId: json['source']?['id'],
       publishedAt:
-          DateTime.tryParse(json['publishedAt'] ?? '') ?? DateTime.now(),
-      author: json['author'],
+          DateTime.tryParse(
+            json['publishedAt'] ?? json['published_at'] ?? '',
+          ) ??
+          DateTime.now(),
+      author: json['author'] ?? json['creator']?.toString(),
+    );
+  }
+
+  /// GNews API formatından haber oluşturur
+  factory NewsArticle.fromGNews(Map<String, dynamic> json) {
+    return NewsArticle(
+      title: json['title'] ?? 'Başlık Yok',
+      description: json['description'],
+      content: json['content'],
+      urlToImage: json['image'],
+      url: json['url'] ?? '',
+      source:
+          json['source']?['name'] ??
+          json['source']?['title'] ??
+          'Bilinmeyen Kaynak',
+      sourceId: json['source']?['id'],
+      publishedAt:
+          DateTime.tryParse(json['published_at'] ?? '') ?? DateTime.now(),
+      author: json['author']?.toString() ?? json['creator']?.toString(),
     );
   }
 

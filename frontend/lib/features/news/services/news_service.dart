@@ -1,16 +1,381 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../models/news_article.dart';
+import '../../../core/constants/api_keys.dart';
 
-/// GNews / MediaStack API Servisi (ÜCRETSİZ ALTERNATİF)
+/// NewsAPI / GNews / MediaStack API Servisi
 ///
-/// NewsAPI yerine ücretsiz API kullanımı.
-/// Not: Ücretsiz API'lar sınırlı olduğu için demo veriler de dahil edildi.
-///
-/// Alternatifler:
-/// - GNews API: https://gnews.io/ (10 çağrı/gün ücretsiz)
-/// - MediaStack: https://mediastack.com/ (500 çağrı/ay ücretsiz)
-/// - Currents API: https://currentsapi.services/
+/// Asıl API'leri kullanmak için:
+/// - NewsAPI: https://newsapi.org/ (API key gerekli)
+/// - GNews: https://gnews.io/ (API key gerekli, ücretsiz plan var)
+/// - MediaStack: https://mediastack.com/ (API key gerekli, ücretsiz plan var)
 class NewsService {
-  // Demo haber verileri (API key olmadan çalışması için)
+  // Base URLs for different news APIs
+  static const String _newsApiBaseUrl = 'https://newsapi.org/v2';
+  static const String _gnewsApiBaseUrl = 'https://gnews.io/api/v4';
+  static const String _mediastackBaseUrl = 'http://api.mediastack.com/v1';
+
+  /// Manşetleri getir (NewsAPI kullanarak)
+  Future<List<NewsArticle>> getTopHeadlines({
+    String country = 'tr',
+    NewsCategory? category,
+    int pageSize = 20,
+    int page = 1,
+  }) async {
+    try {
+      if (ApiKeys.newsApi.isNotEmpty) {
+        // Try NewsAPI first
+        final uri = Uri.parse('$_newsApiBaseUrl/top-headlines').replace(
+          queryParameters: {
+            'country': country,
+            if (category != null) 'category': category.value,
+            'pageSize': pageSize.toString(),
+            'page': page.toString(),
+            'apiKey': ApiKeys.newsApi,
+          },
+        );
+
+        final response = await http.get(uri);
+
+        if (response.statusCode == 200) {
+          final Map<String, dynamic> data = json.decode(response.body);
+          final List<dynamic> articles = data['articles'];
+          return articles.map((json) => NewsArticle.fromJson(json)).toList();
+        } else {
+          throw NewsException(
+            'NewsAPI hatası: ${response.statusCode}',
+            response.statusCode,
+          );
+        }
+      } else if (_isAnyApiKeyAvailable()) {
+        // Fallback to alternative APIs
+        return await _getTopHeadlinesAlternative(
+          country,
+          category,
+          pageSize,
+          page,
+        );
+      } else {
+        // Fallback to demo data if no API keys are available
+        return await _getDemoTopHeadlines(country, category, pageSize, page);
+      }
+    } catch (e) {
+      if (e is NewsException) rethrow;
+      throw NewsException('Haberler yüklenemedi: $e', 0);
+    }
+  }
+
+  /// Haber ara (NewsAPI kullanarak)
+  Future<List<NewsArticle>> searchNews(
+    String query, {
+    String sortBy = 'publishedAt',
+    String language = 'tr',
+    int pageSize = 20,
+    int page = 1,
+  }) async {
+    try {
+      if (ApiKeys.newsApi.isNotEmpty) {
+        // Try NewsAPI first
+        final uri = Uri.parse('$_newsApiBaseUrl/everything').replace(
+          queryParameters: {
+            'q': query,
+            'sortBy': sortBy,
+            'language': language,
+            'pageSize': pageSize.toString(),
+            'page': page.toString(),
+            'apiKey': ApiKeys.newsApi,
+          },
+        );
+
+        final response = await http.get(uri);
+
+        if (response.statusCode == 200) {
+          final Map<String, dynamic> data = json.decode(response.body);
+          final List<dynamic> articles = data['articles'];
+          return articles.map((json) => NewsArticle.fromJson(json)).toList();
+        } else {
+          throw NewsException(
+            'NewsAPI arama hatası: ${response.statusCode}',
+            response.statusCode,
+          );
+        }
+      } else if (_isAnyApiKeyAvailable()) {
+        // Fallback to alternative APIs
+        return await _searchNewsAlternative(
+          query,
+          sortBy,
+          language,
+          pageSize,
+          page,
+        );
+      } else {
+        // Fallback to demo data if no API keys are available
+        return await _getDemoSearchResults(query);
+      }
+    } catch (e) {
+      if (e is NewsException) rethrow;
+      throw NewsException('Arama başarısız: $e', 0);
+    }
+  }
+
+  /// Kaynaklardan haberleri getir
+  Future<List<NewsArticle>> getNewsBySources(
+    List<String> sources, {
+    int pageSize = 20,
+    int page = 1,
+  }) async {
+    try {
+      if (ApiKeys.newsApi.isNotEmpty) {
+        final uri = Uri.parse('$_newsApiBaseUrl/top-headlines').replace(
+          queryParameters: {
+            'sources': sources.join(','),
+            'pageSize': pageSize.toString(),
+            'page': page.toString(),
+            'apiKey': ApiKeys.newsApi,
+          },
+        );
+
+        final response = await http.get(uri);
+
+        if (response.statusCode == 200) {
+          final Map<String, dynamic> data = json.decode(response.body);
+          final List<dynamic> articles = data['articles'];
+          return articles.map((json) => NewsArticle.fromJson(json)).toList();
+        } else {
+          throw NewsException(
+            'Kaynaklara göre haberler alınamadı',
+            response.statusCode,
+          );
+        }
+      } else {
+        // Fallback to demo data
+        return await _getDemoTopHeadlines('tr', null, pageSize, page);
+      }
+    } catch (e) {
+      if (e is NewsException) rethrow;
+      throw NewsException('Kaynaklara göre haberler başarısız: $e', 0);
+    }
+  }
+
+  /// Mevcut haber kaynaklarını listele
+  Future<List<NewsSource>> getSources({
+    String? category,
+    String? language,
+    String? country,
+  }) async {
+    try {
+      if (ApiKeys.newsApi.isNotEmpty) {
+        final uri = Uri.parse('$_newsApiBaseUrl/sources').replace(
+          queryParameters: {
+            if (category != null) 'category': category,
+            if (language != null) 'language': language,
+            if (country != null) 'country': country,
+            'apiKey': ApiKeys.newsApi,
+          },
+        );
+
+        final response = await http.get(uri);
+
+        if (response.statusCode == 200) {
+          final Map<String, dynamic> data = json.decode(response.body);
+          final List<dynamic> sources = data['sources'];
+          return sources.map((json) => NewsSource.fromJson(json)).toList();
+        } else {
+          throw NewsException(
+            'Haber kaynakları alınamadı',
+            response.statusCode,
+          );
+        }
+      } else {
+        // Return demo sources
+        return _getDemoSources();
+      }
+    } catch (e) {
+      if (e is NewsException) rethrow;
+      throw NewsException('Haber kaynakları başarısız: $e', 0);
+    }
+  }
+
+  // Helper methods for alternative APIs
+  bool _isAnyApiKeyAvailable() {
+    return ApiKeys.newsApi.isNotEmpty ||
+        ApiKeys.unsplash.isNotEmpty; // Using unsplash key slot for GNews key
+  }
+
+  Future<List<NewsArticle>> _getTopHeadlinesAlternative(
+    String country,
+    NewsCategory? category,
+    int pageSize,
+    int page,
+  ) async {
+    // Try GNews API as alternative
+    try {
+      final apiKey = ApiKeys.newsApi.isNotEmpty
+          ? ApiKeys.newsApi
+          : 'YOUR_GNEWS_API_KEY';
+      if (apiKey == 'YOUR_GNEWS_API_KEY')
+        return await _getDemoTopHeadlines(country, category, pageSize, page);
+
+      String topic = 'general';
+      if (category != null) {
+        switch (category.value) {
+          case 'business':
+            topic = 'business';
+            break;
+          case 'entertainment':
+            topic = 'entertainment';
+            break;
+          case 'general':
+            topic = 'general';
+            break;
+          case 'health':
+            topic = 'health';
+            break;
+          case 'science':
+            topic = 'science';
+            break;
+          case 'sports':
+            topic = 'sports';
+            break;
+          case 'technology':
+            topic = 'technology';
+            break;
+          default:
+            topic = 'general';
+        }
+      }
+
+      final uri = Uri.parse('$_gnewsApiBaseUrl/top-headlines').replace(
+        queryParameters: {
+          'token': apiKey,
+          'lang': country == 'tr' ? 'tr' : country,
+          'topic': topic,
+          'max': pageSize.toString(),
+        },
+      );
+
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        final List<dynamic> articles = data['articles'];
+        return articles.map((json) => NewsArticle.fromGNews(json)).toList();
+      } else {
+        return await _getDemoTopHeadlines(country, category, pageSize, page);
+      }
+    } catch (e) {
+      return await _getDemoTopHeadlines(country, category, pageSize, page);
+    }
+  }
+
+  Future<List<NewsArticle>> _searchNewsAlternative(
+    String query,
+    String sortBy,
+    String language,
+    int pageSize,
+    int page,
+  ) async {
+    // Try GNews API as alternative
+    try {
+      final apiKey = ApiKeys.newsApi.isNotEmpty
+          ? ApiKeys.newsApi
+          : 'YOUR_GNEWS_API_KEY';
+      if (apiKey == 'YOUR_GNEWS_API_KEY')
+        return await _getDemoSearchResults(query);
+
+      final uri = Uri.parse('$_gnewsApiBaseUrl/search').replace(
+        queryParameters: {
+          'q': query,
+          'token': apiKey,
+          'lang': language,
+          'max': pageSize.toString(),
+        },
+      );
+
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        final List<dynamic> articles = data['articles'];
+        return articles.map((json) => NewsArticle.fromGNews(json)).toList();
+      } else {
+        return await _getDemoSearchResults(query);
+      }
+    } catch (e) {
+      return await _getDemoSearchResults(query);
+    }
+  }
+
+  // Demo data methods for fallback
+  Future<List<NewsArticle>> _getDemoTopHeadlines(
+    String country,
+    NewsCategory? category,
+    int pageSize,
+    int page,
+  ) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    List<Map<String, dynamic>> newsData = _demoNews;
+
+    if (category != null && _categoryNews.containsKey(category.value)) {
+      newsData = _categoryNews[category.value]!;
+    }
+
+    final start = (page - 1) * pageSize;
+    final end = start + pageSize;
+    final paginatedData = newsData.length > start
+        ? newsData.sublist(start, end.clamp(0, newsData.length))
+        : newsData;
+
+    return paginatedData.map((json) => NewsArticle.fromJson(json)).toList();
+  }
+
+  Future<List<NewsArticle>> _getDemoSearchResults(String query) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    final searchResults = _demoNews.where((news) {
+      final title = (news['title'] as String).toLowerCase();
+      final description = (news['description'] as String?)?.toLowerCase() ?? '';
+      return title.contains(query.toLowerCase()) ||
+          description.contains(query.toLowerCase());
+    }).toList();
+
+    return searchResults.map((json) => NewsArticle.fromJson(json)).toList();
+  }
+
+  List<NewsSource> _getDemoSources() {
+    return [
+      NewsSource(
+        id: 'teknoloji-haber',
+        name: 'Teknoloji Haber',
+        description: 'Teknoloji dünyasından son haberler',
+        url: 'https://example.com',
+        category: 'technology',
+        language: 'tr',
+        country: 'tr',
+      ),
+      NewsSource(
+        id: 'spor-arena',
+        name: 'Spor Arena',
+        description: 'Spor dünyasından dakika dakika',
+        url: 'https://example.com',
+        category: 'sports',
+        language: 'tr',
+        country: 'tr',
+      ),
+      NewsSource(
+        id: 'ekonomi-gundem',
+        name: 'Ekonomi Gündem',
+        description: 'Ekonomi ve finans haberleri',
+        url: 'https://example.com',
+        category: 'business',
+        language: 'tr',
+        country: 'tr',
+      ),
+    ];
+  }
+
+  // Demo news data
   static final List<Map<String, dynamic>> _demoNews = [
     {
       'title': 'Yapay Zeka Teknolojisinde Çığır Açan Gelişme',
@@ -134,7 +499,6 @@ class NewsService {
     },
   ];
 
-  /// Kategoriye göre demo haberler
   static final Map<String, List<Map<String, dynamic>>> _categoryNews = {
     'general': _demoNews,
     'technology': [
@@ -234,109 +598,6 @@ class NewsService {
       },
     ],
   };
-
-  /// Manşetleri getir (Demo veriler kullanılıyor)
-  Future<List<NewsArticle>> getTopHeadlines({
-    String country = 'tr',
-    NewsCategory? category,
-    int pageSize = 20,
-    int page = 1,
-  }) async {
-    // Simüle edilmiş gecikme
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    try {
-      List<Map<String, dynamic>> newsData;
-
-      if (category != null && _categoryNews.containsKey(category.value)) {
-        newsData = _categoryNews[category.value]!;
-      } else {
-        newsData = _demoNews;
-      }
-
-      // Sayfalama
-      final start = (page - 1) * pageSize;
-      final end = start + pageSize;
-      final paginatedData = newsData.length > start
-          ? newsData.sublist(start, end.clamp(0, newsData.length))
-          : newsData;
-
-      return paginatedData.map((json) => NewsArticle.fromJson(json)).toList();
-    } catch (e) {
-      throw NewsException('Haberler yüklenemedi: $e', 0);
-    }
-  }
-
-  /// Haber ara (Demo veriler içinde arama)
-  Future<List<NewsArticle>> searchNews(
-    String query, {
-    String sortBy = 'publishedAt',
-    String language = 'tr',
-    int pageSize = 20,
-    int page = 1,
-  }) async {
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    try {
-      final searchResults = _demoNews.where((news) {
-        final title = (news['title'] as String).toLowerCase();
-        final description =
-            (news['description'] as String?)?.toLowerCase() ?? '';
-        return title.contains(query.toLowerCase()) ||
-            description.contains(query.toLowerCase());
-      }).toList();
-
-      return searchResults.map((json) => NewsArticle.fromJson(json)).toList();
-    } catch (e) {
-      throw NewsException('Arama başarısız: $e', 0);
-    }
-  }
-
-  /// Kaynaklardan haberleri getir
-  Future<List<NewsArticle>> getNewsBySources(
-    List<String> sources, {
-    int pageSize = 20,
-    int page = 1,
-  }) async {
-    return getTopHeadlines(pageSize: pageSize, page: page);
-  }
-
-  /// Mevcut haber kaynaklarını listele
-  Future<List<NewsSource>> getSources({
-    String? category,
-    String? language,
-    String? country,
-  }) async {
-    return [
-      NewsSource(
-        id: 'teknoloji-haber',
-        name: 'Teknoloji Haber',
-        description: 'Teknoloji dünyasından son haberler',
-        url: 'https://example.com',
-        category: 'technology',
-        language: 'tr',
-        country: 'tr',
-      ),
-      NewsSource(
-        id: 'spor-arena',
-        name: 'Spor Arena',
-        description: 'Spor dünyasından dakika dakika',
-        url: 'https://example.com',
-        category: 'sports',
-        language: 'tr',
-        country: 'tr',
-      ),
-      NewsSource(
-        id: 'ekonomi-gundem',
-        name: 'Ekonomi Gündem',
-        description: 'Ekonomi ve finans haberleri',
-        url: 'https://example.com',
-        category: 'business',
-        language: 'tr',
-        country: 'tr',
-      ),
-    ];
-  }
 }
 
 /// Haber Kaynağı Modeli

@@ -3,6 +3,15 @@ import 'package:flutter/material.dart';
 import '../features/wallpapers/screens/wallpapers_screen.dart';
 import '../features/weather/screens/weather_screen.dart';
 import '../features/news/screens/news_screen.dart';
+import '../features/crypto/screens/crypto_screen.dart';
+import '../features/chatbot/screens/chatbot_screen.dart';
+import '../features/maps/screens/maps_screen.dart';
+import '../features/countries/screens/countries_screen.dart';
+import '../features/ai_models/screens/ai_models_screen.dart';
+import '../features/stocks/screens/stocks_screen.dart';
+import '../features/currency/screens/currency_screen.dart';
+import '../features/image_gen/screens/image_gen_screen.dart';
+import 'api_status_screen.dart';
 
 /// Apps Hub Screen - Super App Uygulama Merkezi
 ///
@@ -49,56 +58,64 @@ class _AppsHubScreenState extends State<AppsHubScreen>
       icon: Icons.currency_bitcoin_rounded,
       gradient: [Color(0xFFF7931A), Color(0xFFFFD700)],
       description: 'Kripto paralar',
-      isAvailable: false,
+      isAvailable: true,
+      route: const CryptoScreen(),
     ),
     AppItem(
       name: 'Sohbet Botu',
       icon: Icons.smart_toy_rounded,
       gradient: [Color(0xFF10A37F), Color(0xFF00D4AA)],
       description: 'AI asistan',
-      isAvailable: false,
+      isAvailable: true,
+      route: const ChatbotScreen(),
     ),
     AppItem(
       name: 'Haritalar',
       icon: Icons.map_rounded,
       gradient: [Color(0xFF4285F4), Color(0xFF34A853)],
       description: 'Dünya haritası',
-      isAvailable: false,
+      isAvailable: true,
+      route: const MapsScreen(),
     ),
     AppItem(
       name: 'Ülkeler',
       icon: Icons.public_rounded,
       gradient: [Color(0xFF8E44AD), Color(0xFF3498DB)],
       description: 'Ülke bilgileri',
-      isAvailable: false,
+      isAvailable: true,
+      route: const CountriesScreen(),
     ),
     AppItem(
       name: 'AI Modeller',
       icon: Icons.psychology_rounded,
       gradient: [Color(0xFF667EEA), Color(0xFF764BA2)],
       description: 'Hugging Face',
-      isAvailable: false,
+      isAvailable: true,
+      route: const AiModelsScreen(),
     ),
     AppItem(
       name: 'Borsa',
       icon: Icons.show_chart_rounded,
       gradient: [Color(0xFF00C853), Color(0xFFFF5252)],
       description: 'Hisse senetleri',
-      isAvailable: false,
+      isAvailable: true,
+      route: const StocksScreen(),
     ),
     AppItem(
       name: 'Döviz',
       icon: Icons.currency_exchange_rounded,
       gradient: [Color(0xFF1ABC9C), Color(0xFF16A085)],
       description: 'Döviz çevirici',
-      isAvailable: false,
+      isAvailable: true,
+      route: const CurrencyScreen(),
     ),
     AppItem(
       name: 'Görsel Üret',
       icon: Icons.auto_awesome_rounded,
       gradient: [Color(0xFF9B59B6), Color(0xFFE74C3C)],
       description: 'AI ile resim',
-      isAvailable: false,
+      isAvailable: true,
+      route: const ImageGenScreen(),
     ),
   ];
 
@@ -274,11 +291,17 @@ class _AppsHubScreenState extends State<AppsHubScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildStat('Aktif', '3', Icons.check_circle_outline),
+                _buildStat('Aktif', '11', Icons.check_circle_outline),
                 _buildDivider(),
-                _buildStat('Yakında', '8', Icons.access_time),
+                _buildStat('Yakında', '0', Icons.access_time),
                 _buildDivider(),
-                _buildStat('API', '11', Icons.api),
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ApiStatusScreen()),
+                  ),
+                  child: _buildStat('API', '🔗', Icons.api),
+                ),
               ],
             ),
           ),

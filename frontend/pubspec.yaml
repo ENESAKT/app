@@ -12,7 +12,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   
   # HTTP ve API
-  http: ^1.2.0
+  http: ^1.6.0
   
   # Firebase
   firebase_core: ^3.8.0
@@ -49,11 +49,14 @@ dependencies:
   dio: ^5.4.0
   open_filex: ^4.4.0
   path_provider: ^2.1.2
-  permission_handler: ^11.3.0
+  permission_handler: ^12.0.1
   
   # Super App - API Integrations
-  geolocator: ^13.0.2           # Konum servisi (Weather için)
+  geolocator: ^14.0.2           # Konum servisi (Weather için)
   shimmer: ^3.0.0               # Loading efekti
+  flutter_map: ^7.0.2           # Harita widget (Geoapify ile)
+  latlong2: ^0.9.1              # Lat/Long koordinatları
+  google_generative_ai: ^0.4.6  # Gemini AI chatbot
 
 dev_dependencies:
   flutter_test:
