@@ -50,6 +50,10 @@ dependencies:
   open_filex: ^4.4.0
   path_provider: ^2.1.2
   permission_handler: ^11.3.0
+  
+  # Super App - API Integrations
+  geolocator: ^13.0.2           # Konum servisi (Weather için)
+  shimmer: ^3.0.0               # Loading efekti
 
 dev_dependencies:
   flutter_test:

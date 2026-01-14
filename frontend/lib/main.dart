@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'services/auth_provider.dart';
 import 'services/database_seeder.dart';
 import 'screens/login_screen.dart';
-import 'screens/main_scaffold.dart';
 import 'screens/home_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/conversations_screen.dart';
@@ -16,7 +15,10 @@ import 'screens/registration_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/friends_screen.dart';
 import 'screens/seed_data_screen.dart'; // DEV ONLY
-import 'widgets/smart_loading_widget.dart';
+import 'screens/apps_hub_screen.dart';
+import 'features/wallpapers/screens/wallpapers_screen.dart';
+import 'features/weather/screens/weather_screen.dart';
+import 'features/news/screens/news_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -110,60 +112,43 @@ class MyApp extends StatelessWidget {
           '/blocked': (context) => const BlockedUsersScreen(),
           '/seed': (context) =>
               const SeedDataScreen(), // DEV ONLY - Remove in production
+          // Super App Routes
+          '/apps-hub': (context) => const AppsHubScreen(),
+          '/wallpapers': (context) => const WallpapersScreen(),
+          '/weather': (context) => const WeatherScreen(),
+          '/news': (context) => const NewsScreen(),
         },
       ),
     );
   }
 }
 
-/// Auth Wrapper - Oturum durumuna göre yönlendirme
-class AuthWrapper extends StatefulWidget {
+/// Auth Gate - Supabase onAuthStateChange ile oturum kontrolü
+class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
   @override
-  State<AuthWrapper> createState() => _AuthWrapperState();
-}
-
-class _AuthWrapperState extends State<AuthWrapper> {
-  @override
-  void initState() {
-    super.initState();
-    _initApp();
-  }
-
-  Future<void> _initApp() async {
-    // Uygulama başlarken auth kontrolü yap (async, bloklamadan)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<AuthProvider>(context, listen: false).checkAuth();
-    });
-  }
-
-  void _retryAuth() {
-    Provider.of<AuthProvider>(context, listen: false).checkAuth();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, auth, _) {
-        // Yükleniyor - Akıllı Bekleme Ekranı
-        if (auth.isLoading) {
-          return Scaffold(
-            body: SmartLoadingWidget(
-              title: 'Arkadaşlık',
-              showServerMessage: true,
-              onRetry: _retryAuth,
-            ),
+    return StreamBuilder<AuthState>(
+      stream: Supabase.instance.client.auth.onAuthStateChange,
+      builder: (context, snapshot) {
+        // Bekleniyor durumu - Loading göster
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // Giriş yapılmış -> MainLayout
-        if (auth.isLoggedIn) {
-          return const MainScaffold();
-        }
+        // Oturum kontrolü
+        final session = snapshot.data?.session;
 
-        // Giriş yapılmamış -> Login
-        return const LoginScreen();
+        if (session != null) {
+          // Oturum var -> Ana Sayfa
+          return const HomeScreen();
+        } else {
+          // Oturum yok -> Giriş Ekranı
+          return const LoginScreen();
+        }
       },
     );
   }
