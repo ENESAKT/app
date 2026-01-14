@@ -1,16 +1,45 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../services/auth_provider.dart';
 
 /// Ayarlar ekranı - Profil ve uygulama ayarları
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
-  // GitHub repository URL (kullanıcı doldurabilir)
-  static const String GITHUB_REPO_URL =
-      'https://github.com/USERNAME/REPO_NAME'; // TODO: Doldurulacak
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  // GitHub repository URL - DOĞRU URL'Yİ BURAYA YAZ
+  static const String GITHUB_REPO_URL = 'https://github.com/ENESAKT/app';
   static const String GITHUB_RELEASES_URL = '$GITHUB_REPO_URL/releases/latest';
+
+  // Dinamik versiyon bilgisi
+  String _version = '...';
+  String _buildNumber = '...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersionInfo();
+  }
+
+  Future<void> _loadVersionInfo() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() {
+          _version = packageInfo.version;
+          _buildNumber = packageInfo.buildNumber;
+        });
+      }
+    } catch (e) {
+      print('Versiyon bilgisi alınamadı: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +117,8 @@ class SettingsScreen extends StatelessWidget {
               _buildListTile(
                 icon: Icons.info_outline,
                 title: 'Sürüm',
-                subtitle: 'v1.0.0', // pubspec.yaml'dan alınabilir
+                subtitle:
+                    'v$_version (Build $_buildNumber)', // DİNAMİK VERSİYON
                 onTap: null,
               ),
             ],
@@ -236,24 +266,37 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Future<void> _checkForUpdates(BuildContext context) async {
-    // GitHub Releases sayfasını aç
     final Uri url = Uri.parse(GITHUB_RELEASES_URL);
 
+    print('🔗 Açılacak URL: $url');
+
     try {
-      final canLaunch = await canLaunchUrl(url);
-      if (canLaunch) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Güncelleme sayfası açılamadı'),
-              backgroundColor: Colors.red,
+      // Doğrudan launchUrl kullan (canLaunchUrl bazen false döner)
+      final launched = await launchUrl(
+        url,
+        mode: LaunchMode.externalApplication,
+      );
+
+      print('🚀 URL açıldı mı: $launched');
+
+      if (!launched && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Tarayıcı açılamadı. URL: $url'),
+            backgroundColor: Colors.orange,
+            action: SnackBarAction(
+              label: 'Kopyala',
+              textColor: Colors.white,
+              onPressed: () {
+                // URL'yi panoya kopyala
+                // Clipboard.setData(ClipboardData(text: url.toString()));
+              },
             ),
-          );
-        }
+          ),
+        );
       }
     } catch (e) {
+      print('❌ URL açma hatası: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),

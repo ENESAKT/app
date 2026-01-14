@@ -8,7 +8,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-/// Update Info Model - Güncelleme bilgileri
+/// ═══════════════════════════════════════════════════════════════════════════
+/// UPDATE INFO MODEL
+/// ═══════════════════════════════════════════════════════════════════════════
+
 class AppUpdateInfo {
   final String currentVersion;
   final int buildNumber;
@@ -35,7 +38,48 @@ class AppUpdateInfo {
   }
 }
 
-/// Gelişmiş Güncelleme Servisi - In-App Download destekli
+/// ═══════════════════════════════════════════════════════════════════════════
+/// DOWNLOAD PROGRESS MODEL
+/// ═══════════════════════════════════════════════════════════════════════════
+
+class DownloadProgress {
+  final int received;
+  final int total;
+  final double percentage;
+  final DownloadStatus status;
+  final String? error;
+
+  DownloadProgress({
+    this.received = 0,
+    this.total = 0,
+    this.percentage = 0,
+    this.status = DownloadStatus.idle,
+    this.error,
+  });
+
+  DownloadProgress copyWith({
+    int? received,
+    int? total,
+    double? percentage,
+    DownloadStatus? status,
+    String? error,
+  }) {
+    return DownloadProgress(
+      received: received ?? this.received,
+      total: total ?? this.total,
+      percentage: percentage ?? this.percentage,
+      status: status ?? this.status,
+      error: error ?? this.error,
+    );
+  }
+}
+
+enum DownloadStatus { idle, downloading, completed, error }
+
+/// ═══════════════════════════════════════════════════════════════════════════
+/// UPDATE SERVICE - Singleton
+/// ═══════════════════════════════════════════════════════════════════════════
+
 class UpdateService {
   static final UpdateService _instance = UpdateService._internal();
   factory UpdateService() => _instance;
@@ -49,14 +93,27 @@ class UpdateService {
   BuildContext? _context;
   bool _dialogShowing = false;
 
-  /// Servisi başlat
+  /// Progress notifier - UI bunu dinleyecek
+  final ValueNotifier<DownloadProgress> progressNotifier = ValueNotifier(
+    DownloadProgress(),
+  );
+
+  /// ════════════════════════════════════════════════════════════════════════
+  /// INIT - Servisi başlat
+  /// ════════════════════════════════════════════════════════════════════════
+
   Future<void> init(BuildContext context) async {
+    print('');
+    print('🚀 UPDATE SERVICE BAŞLATILIYOR...');
+
     _context = context;
 
     final packageInfo = await PackageInfo.fromPlatform();
     _currentBuildNumber = int.tryParse(packageInfo.buildNumber) ?? 1;
 
-    print('📱 Uygulama Build: $_currentBuildNumber');
+    print('📱 App: ${packageInfo.appName}');
+    print('📱 Version: ${packageInfo.version}');
+    print('📱 Build: $_currentBuildNumber');
 
     await checkForUpdate();
     _startRealtimeListener();
@@ -65,10 +122,19 @@ class UpdateService {
   void dispose() {
     _realtimeSubscription?.cancel();
     _realtimeSubscription = null;
+    progressNotifier.dispose();
   }
 
-  /// Güncelleme kontrolü (10s timeout)
+  /// ════════════════════════════════════════════════════════════════════════
+  /// CHECK FOR UPDATE - Supabase'den kontrol
+  /// ════════════════════════════════════════════════════════════════════════
+
   Future<AppUpdateInfo?> checkForUpdate() async {
+    print('');
+    print('═══════════════════════════════════════════════════════');
+    print('🔍 UPDATE KONTROLÜ');
+    print('═══════════════════════════════════════════════════════');
+
     try {
       final response = await _supabase
           .from('app_config')
@@ -78,29 +144,35 @@ class UpdateService {
           .timeout(const Duration(seconds: 10), onTimeout: () => null);
 
       if (response == null) {
-        print('⚠️ app_config yok veya timeout');
+        print('❌ app_config tablosunda veri yok!');
         return null;
       }
 
+      print('📦 Supabase Response: $response');
+
       final updateInfo = AppUpdateInfo.fromJson(response);
 
-      print('🌐 Sunucu Build: ${updateInfo.buildNumber}');
+      print('📊 Sunucu Build: ${updateInfo.buildNumber}');
       print('📱 Yerel Build: $_currentBuildNumber');
 
       if (_currentBuildNumber != null &&
           updateInfo.buildNumber > _currentBuildNumber!) {
-        print('✅ Güncelleme mevcut!');
+        print('✅ GÜNCELLEME MEVCUT!');
         _showUpdateDialog(updateInfo);
         return updateInfo;
       } else {
-        print('ℹ️ Uygulama güncel');
+        print('ℹ️ Uygulama güncel.');
         return null;
       }
     } catch (e) {
-      print('❌ Güncelleme kontrolü hatası: $e');
+      print('❌ Hata: $e');
       return null;
     }
   }
+
+  /// ════════════════════════════════════════════════════════════════════════
+  /// REALTIME LISTENER
+  /// ════════════════════════════════════════════════════════════════════════
 
   void _startRealtimeListener() {
     _realtimeSubscription = _supabase
@@ -115,7 +187,12 @@ class UpdateService {
             }
           }
         });
+    print('👂 Realtime listener aktif.');
   }
+
+  /// ════════════════════════════════════════════════════════════════════════
+  /// SHOW UPDATE DIALOG
+  /// ════════════════════════════════════════════════════════════════════════
 
   void _showUpdateDialog(AppUpdateInfo updateInfo) {
     if (_context == null || !_context!.mounted || _dialogShowing) return;
@@ -124,65 +201,134 @@ class UpdateService {
     showDialog(
       context: _context!,
       barrierDismissible: !updateInfo.isForceUpdate,
-      builder: (context) => InAppUpdateDialog(
+      builder: (context) => UpdateAvailableDialog(
         updateInfo: updateInfo,
         onDownload: () => downloadAndInstall(updateInfo.downloadUrl),
       ),
     ).then((_) => _dialogShowing = false);
   }
 
-  /// 📥 APK'yı indir ve kur (In-App)
+  /// ════════════════════════════════════════════════════════════════════════
+  /// DOWNLOAD AND INSTALL - ANA FONKSİYON
+  /// ════════════════════════════════════════════════════════════════════════
+
   Future<void> downloadAndInstall(String url) async {
     if (_context == null || !_context!.mounted) return;
 
-    // Storage izni kontrolü
+    print('');
+    print('═══════════════════════════════════════════════════════');
+    print('📥 İNDİRME BAŞLIYOR');
+    print('═══════════════════════════════════════════════════════');
+    print('🔗 URL: $url');
+
+    // 1. İzin kontrolü
     if (Platform.isAndroid) {
-      final status = await Permission.storage.request();
-      if (!status.isGranted) {
-        _showSnackBar('Depolama izni gerekli!', Colors.red);
+      final installPermission = await Permission.requestInstallPackages
+          .request();
+      if (!installPermission.isGranted) {
+        _showSnackBar(
+          'Bilinmeyen kaynaklardan yükleme izni gerekli!',
+          Colors.red,
+        );
         return;
       }
+      print('✅ Install permission granted');
     }
 
-    // Progress dialog göster
+    // 2. Progress dialogu göster
+    progressNotifier.value = DownloadProgress(
+      status: DownloadStatus.downloading,
+    );
+
     showDialog(
       context: _context!,
       barrierDismissible: false,
       builder: (context) =>
-          DownloadProgressDialog(downloadFuture: _downloadApk(url)),
+          DownloadProgressDialog(progressNotifier: progressNotifier),
     );
+
+    // 3. İndirme işlemini başlat
+    try {
+      final filePath = await _downloadApk(url);
+
+      if (filePath != null && _context!.mounted) {
+        Navigator.of(_context!).pop(); // Dialog kapat
+
+        // 4. APK kurulumunu başlat
+        print('📦 Kurulum başlatılıyor: $filePath');
+        final result = await OpenFilex.open(filePath);
+        print('📦 Sonuç: ${result.message}');
+      }
+    } catch (e) {
+      print('❌ İndirme hatası: $e');
+      progressNotifier.value = DownloadProgress(
+        status: DownloadStatus.error,
+        error: e.toString(),
+      );
+    }
   }
+
+  /// ════════════════════════════════════════════════════════════════════════
+  /// DOWNLOAD APK - Dio ile indirme
+  /// ════════════════════════════════════════════════════════════════════════
 
   Future<String?> _downloadApk(String url) async {
     try {
-      final dir =
-          await getExternalStorageDirectory() ??
-          await getApplicationDocumentsDirectory();
+      // Dosya yolunu belirle
+      final dir = await getApplicationDocumentsDirectory();
       final filePath = '${dir.path}/update.apk';
 
-      print('📥 İndiriliyor: $url');
-      print('📁 Kayıt: $filePath');
+      // Eski dosyayı sil
+      final file = File(filePath);
+      if (await file.exists()) {
+        await file.delete();
+        print('🗑️ Eski APK silindi');
+      }
 
+      print('📁 Kayıt yeri: $filePath');
+
+      // İndirme başlat
       await _dio.download(
         url,
         filePath,
         onReceiveProgress: (received, total) {
           if (total > 0) {
-            final progress = (received / total * 100).toStringAsFixed(0);
-            print('⬇️ İndirme: $progress%');
+            final percentage = (received / total) * 100;
+            progressNotifier.value = DownloadProgress(
+              received: received,
+              total: total,
+              percentage: percentage,
+              status: DownloadStatus.downloading,
+            );
+
+            // Her %10'da bir log
+            if (percentage.toInt() % 10 == 0) {
+              print('⬇️ İndirme: ${percentage.toStringAsFixed(0)}%');
+            }
           }
         },
+        options: Options(
+          responseType: ResponseType.bytes,
+          followRedirects: true,
+          receiveTimeout: const Duration(minutes: 5),
+        ),
       );
 
-      print('✅ İndirme tamamlandı, kurulum başlatılıyor...');
+      // Tamamlandı
+      progressNotifier.value = DownloadProgress(
+        percentage: 100,
+        status: DownloadStatus.completed,
+      );
 
-      // Kurulum ekranını aç
-      final result = await OpenFilex.open(filePath);
-      print('📦 Kurulum sonucu: ${result.message}');
-
+      print('✅ İndirme tamamlandı!');
       return filePath;
     } catch (e) {
-      print('❌ İndirme hatası: $e');
+      print('❌ Download error: $e');
+      progressNotifier.value = DownloadProgress(
+        status: DownloadStatus.error,
+        error: e.toString(),
+      );
+
       if (_context != null && _context!.mounted) {
         Navigator.of(_context!).pop();
         _showSnackBar('İndirme başarısız: $e', Colors.red);
@@ -200,12 +346,15 @@ class UpdateService {
   }
 }
 
-/// In-App Güncelleme Dialogu
-class InAppUpdateDialog extends StatelessWidget {
+/// ═══════════════════════════════════════════════════════════════════════════
+/// UPDATE AVAILABLE DIALOG - Güncelleme bildirimi
+/// ═══════════════════════════════════════════════════════════════════════════
+
+class UpdateAvailableDialog extends StatelessWidget {
   final AppUpdateInfo updateInfo;
   final VoidCallback onDownload;
 
-  const InAppUpdateDialog({
+  const UpdateAvailableDialog({
     super.key,
     required this.updateInfo,
     required this.onDownload,
@@ -220,7 +369,7 @@ class InAppUpdateDialog extends StatelessWidget {
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: updateInfo.isForceUpdate
@@ -291,7 +440,7 @@ class InAppUpdateDialog extends StatelessWidget {
                   color: Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                constraints: const BoxConstraints(maxHeight: 120),
+                constraints: const BoxConstraints(maxHeight: 100),
                 child: SingleChildScrollView(
                   child: Text(
                     updateInfo.releaseNotes,
@@ -329,47 +478,146 @@ class InAppUpdateDialog extends StatelessWidget {
   }
 }
 
-/// İndirme Progress Dialogu
-class DownloadProgressDialog extends StatefulWidget {
-  final Future<String?> downloadFuture;
+/// ═══════════════════════════════════════════════════════════════════════════
+/// DOWNLOAD PROGRESS DIALOG - Yüzde gösterimli indirme ekranı
+/// ═══════════════════════════════════════════════════════════════════════════
 
-  const DownloadProgressDialog({super.key, required this.downloadFuture});
+class DownloadProgressDialog extends StatelessWidget {
+  final ValueNotifier<DownloadProgress> progressNotifier;
 
-  @override
-  State<DownloadProgressDialog> createState() => _DownloadProgressDialogState();
-}
-
-class _DownloadProgressDialogState extends State<DownloadProgressDialog> {
-  @override
-  void initState() {
-    super.initState();
-    widget.downloadFuture.then((path) {
-      if (mounted && path != null) {
-        Navigator.of(context).pop();
-      }
-    });
-  }
+  const DownloadProgressDialog({super.key, required this.progressNotifier});
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircularProgressIndicator(strokeWidth: 3),
-          const SizedBox(height: 20),
-          const Text(
-            'Güncelleme indiriliyor...',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Lütfen bekleyin',
-            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-          ),
-        ],
+    return PopScope(
+      canPop: false, // Kapatılamaz
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: ValueListenableBuilder<DownloadProgress>(
+          valueListenable: progressNotifier,
+          builder: (context, progress, child) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // İkon ve başlık
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.deepPurple.shade400,
+                        Colors.purple.shade400,
+                      ],
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.cloud_download,
+                    color: Colors.white,
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Durum metni
+                Text(
+                  _getStatusText(progress.status),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // Yüzde metni
+                Text(
+                  '${progress.percentage.toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepPurple.shade700,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Progress bar
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: LinearProgressIndicator(
+                    value: progress.percentage / 100,
+                    minHeight: 12,
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Colors.deepPurple.shade500,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Boyut bilgisi
+                Text(
+                  _formatBytes(progress.received, progress.total),
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                ),
+
+                // Hata durumu
+                if (progress.status == DownloadStatus.error) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red.shade700),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            progress.error ?? 'Bilinmeyen hata',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.red.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Kapat'),
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
       ),
     );
+  }
+
+  String _getStatusText(DownloadStatus status) {
+    switch (status) {
+      case DownloadStatus.idle:
+        return 'Hazırlanıyor...';
+      case DownloadStatus.downloading:
+        return 'İndiriliyor...';
+      case DownloadStatus.completed:
+        return 'Tamamlandı!';
+      case DownloadStatus.error:
+        return 'Hata Oluştu';
+    }
+  }
+
+  String _formatBytes(int received, int total) {
+    if (total == 0) return 'Hesaplanıyor...';
+
+    final receivedMB = (received / 1024 / 1024).toStringAsFixed(1);
+    final totalMB = (total / 1024 / 1024).toStringAsFixed(1);
+
+    return '$receivedMB MB / $totalMB MB';
   }
 }

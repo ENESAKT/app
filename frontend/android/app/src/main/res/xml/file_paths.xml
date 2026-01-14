@@ -1,11 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- Cache directory for downloaded APK files -->
+    <!-- Internal app-specific storage -->
+    <files-path name="internal_files" path="." />
+    
+    <!-- Cache directory -->
     <cache-path name="cache" path="." />
     
-    <!-- External storage for downloads -->
-    <external-path name="external_files" path="." />
+    <!-- External app-specific storage -->
+    <external-files-path name="external_files" path="." />
     
-    <!-- Internal storage -->
-    <files-path name="internal_files" path="." />
+    <!-- External storage (for legacy support) -->
+    <external-path name="external_storage" path="." />
+    
+    <!-- Root external storage -->
+    <root-path name="root" path="." />
 </paths>
