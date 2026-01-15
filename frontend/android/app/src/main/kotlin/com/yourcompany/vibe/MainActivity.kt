@@ -1,4 +1,4 @@
-package com.friendapp.frontend
+package com.yourcompany.vibe
 
 import io.flutter.embedding.android.FlutterActivity
 

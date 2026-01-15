@@ -69,7 +69,7 @@ tasks.register("printSigningConfig") {
 }
 
 android {
-    namespace = "com.friendapp.frontend"
+    namespace = "com.yourcompany.vibe"
 
     compileSdk = 36
     ndkVersion = "27.0.12077973"
@@ -171,7 +171,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.friendapp.frontend"
+        applicationId = "com.yourcompany.vibe"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         

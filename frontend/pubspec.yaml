@@ -1,7 +1,7 @@
 ﻿name: frontend
 description: "ArkadaÅŸlÄ±k UygulamasÄ± - Flutter Frontend"
 publish_to: 'none'
-version: 1.0.32+1
+version: 1.0.33+1
 
 environment:
   sdk: ^3.10.7
@@ -63,6 +63,24 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  
+  # Branding - Uygulama ikonu ve splash screen
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.4
+  change_app_package_name: ^1.4.0
 
 flutter:
   uses-material-design: true
+
+# Flutter Launcher Icons Configuration
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/icon.png"
+  min_sdk_android: 21
+
+# Flutter Native Splash Configuration
+flutter_native_splash:
+  color: "#4A148C"
+  image: "assets/icon/icon.png"
+  android_12: true
