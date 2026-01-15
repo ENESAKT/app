@@ -297,8 +297,31 @@ class UpdateService {
 
   Future<String?> _downloadApk(String url) async {
     try {
-      // Dosya yolunu belirle
-      final dir = await getApplicationDocumentsDirectory();
+      // ═══════════════════════════════════════════════════════════════════════
+      // KRİTİK: APK'yı EXTERNAL storage'a kaydet!
+      // Internal storage (getApplicationDocumentsDirectory) kullanılırsa
+      // Android Package Installer dosyaya erişemez ve "Uygulama yüklenemedi" hatası verir.
+      // ═══════════════════════════════════════════════════════════════════════
+
+      Directory? dir;
+
+      // Önce external storage dene
+      if (Platform.isAndroid) {
+        // External cache directories dene (daha güvenli)
+        final externalCacheDirs = await getExternalCacheDirectories();
+        if (externalCacheDirs != null && externalCacheDirs.isNotEmpty) {
+          dir = externalCacheDirs.first;
+          print('📁 External cache kullanılıyor: ${dir.path}');
+        } else {
+          // Fallback: External storage directory
+          dir = await getExternalStorageDirectory();
+          print('📁 External storage kullanılıyor: ${dir?.path}');
+        }
+      }
+
+      // Eğer hala null ise, son çare olarak documents kullan (ama bu çalışmayabilir)
+      dir ??= await getApplicationDocumentsDirectory();
+
       final filePath = '${dir.path}/update.apk';
 
       // Eski dosyayı sil

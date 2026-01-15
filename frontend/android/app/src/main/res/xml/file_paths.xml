@@ -6,6 +6,9 @@
     <!-- Cache directory -->
     <cache-path name="cache" path="." />
     
+    <!-- External cache directory (for APK downloads) -->
+    <external-cache-path name="external_cache" path="." />
+    
     <!-- External app-specific storage -->
     <external-files-path name="external_files" path="." />
     
