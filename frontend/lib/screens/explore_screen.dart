@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/post_model.dart';
 import '../services/post_service.dart';
+import '../services/friendship_service.dart';
 import '../widgets/user_tile.dart';
 
 /// ExploreScreen - Keşfet ekranı
@@ -212,11 +213,28 @@ class _ExploreScreenState extends State<ExploreScreen>
           username: user['username'] ?? 'Kullanıcı',
           avatarUrl: user['avatar_url'],
           subtitle: user['bio'],
-          showFollowButton: false,
+          showFriendButton: true,
           onTap: () => _openProfile(user['id']),
+          onFriendAction: () => _sendFriendRequest(user['id']),
         );
       },
     );
+  }
+
+  Future<void> _sendFriendRequest(String? userId) async {
+    if (userId == null) return;
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (currentUserId == null) return;
+
+    try {
+      final friendshipService = FriendshipService();
+      await friendshipService.sendFriendRequest(
+        fromUserId: currentUserId,
+        toUserId: userId,
+      );
+    } catch (e) {
+      print('❌ Friend request error: $e');
+    }
   }
 
   Widget _buildGrid() {

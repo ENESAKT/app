@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/fake_user_model.dart';
+import '../services/friendship_service.dart';
 
 /// HomeScreen - Modern Sosyal Medya Ana Ekranı
 ///
@@ -29,6 +30,11 @@ class _HomeScreenState extends State<HomeScreen>
   // Sahte kullanıcılar
   List<FakeUser> _fakeUsers = [];
   List<FakeStory> _fakeStories = [];
+
+  // Arkadaşlık durumu takibi (userId -> sent)
+  final Map<String, bool> _friendRequestSent = {};
+  final Map<String, bool> _friendRequestLoading = {};
+  final FriendshipService _friendshipService = FriendshipService();
 
   bool _isLoading = true;
 
@@ -669,16 +675,8 @@ class _HomeScreenState extends State<HomeScreen>
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            // TODO: Profil sayfasına git
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('${user.name} profiline gidiliyor...'),
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            );
+            // Profil sayfasına git
+            Navigator.pushNamed(context, '/profile', arguments: user.id);
           },
           borderRadius: BorderRadius.circular(20),
           child: Column(
@@ -799,45 +797,7 @@ class _HomeScreenState extends State<HomeScreen>
                   child: SizedBox(
                     width: double.infinity,
                     height: 32,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              '${user.name} için istek gönderildi! 🎉',
-                            ),
-                            behavior: SnackBarBehavior.floating,
-                            backgroundColor: colors[0],
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: colors[0],
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        padding: EdgeInsets.zero,
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.person_add, size: 14),
-                          SizedBox(width: 4),
-                          Text(
-                            'Arkadaş Ekle',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    child: _buildFriendButton(user, colors),
                   ),
                 ),
               ),
@@ -846,6 +806,121 @@ class _HomeScreenState extends State<HomeScreen>
         ),
       ),
     );
+  }
+
+  /// Arkadaş ekleme butonu (State yönetimli)
+  Widget _buildFriendButton(FakeUser user, List<Color> colors) {
+    final isLoading = _friendRequestLoading[user.id] ?? false;
+    final isSent = _friendRequestSent[user.id] ?? false;
+
+    if (isLoading) {
+      return Container(
+        decoration: BoxDecoration(
+          color: colors[0].withOpacity(0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(colors[0]),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (isSent) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.orange.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.orange.withOpacity(0.3)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.hourglass_empty, size: 14, color: Colors.orange[700]),
+            const SizedBox(width: 4),
+            Text(
+              'İstek Gönderildi',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.orange[700],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ElevatedButton(
+      onPressed: () => _sendFriendRequest(user, colors[0]),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: colors[0],
+        foregroundColor: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        padding: EdgeInsets.zero,
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.person_add, size: 14),
+          SizedBox(width: 4),
+          Text(
+            'Arkadaş Ekle',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Arkadaşlık isteği gönder
+  Future<void> _sendFriendRequest(FakeUser user, Color accentColor) async {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (currentUserId == null) return;
+
+    setState(() => _friendRequestLoading[user.id] = true);
+
+    try {
+      // Fake user için simülasyon, gerçek user için API çağrısı
+      if (isFakeUserId(user.id)) {
+        // Fake user - sadece UI güncelle
+        await Future.delayed(const Duration(milliseconds: 500));
+      } else {
+        // Gerçek user - Supabase API
+        await _friendshipService.sendFriendRequest(
+          fromUserId: currentUserId,
+          toUserId: user.id,
+        );
+      }
+
+      setState(() {
+        _friendRequestSent[user.id] = true;
+        _friendRequestLoading[user.id] = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${user.name} için istek gönderildi! 🎉'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: accentColor,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _friendRequestLoading[user.id] = false);
+      print('❌ Friend request error: $e');
+    }
   }
 
   /// Floating Action Button

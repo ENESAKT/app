@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'services/auth_provider.dart';
 import 'services/database_seeder.dart';
+import 'services/firebase_notification_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_scaffold.dart'; // MainScaffold import
 import 'screens/search_screen.dart';
@@ -16,18 +19,36 @@ import 'screens/settings_screen.dart';
 import 'screens/friends_screen.dart';
 import 'screens/seed_data_screen.dart'; // DEV ONLY
 import 'screens/apps_hub_screen.dart';
+import 'screens/profile_screen.dart';
 import 'features/wallpapers/screens/wallpapers_screen.dart';
 import 'features/weather/screens/weather_screen.dart';
 import 'features/news/screens/news_screen.dart';
 
+/// Background message handler - Top-level function olmalı
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  print('📬 Background mesaj: ${message.notification?.title}');
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Supabase initialization (Firebase KALDIRILDI)
+  // 1. Firebase initialization (FCM için gerekli)
+  await Firebase.initializeApp();
+  print('🔥 Firebase initialized');
+
+  // 2. Background message handler'ı kaydet
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // 3. Supabase initialization
   await Supabase.initialize(
     url: 'https://bmcbzkkewskuibojxvud.supabase.co',
     anonKey: 'sb_publishable_Ml7r3_OXOW2Tk_yOwm3TBQ_CUU1MTat',
   );
+
+  // 4. Firebase Notification Service başlat (FCM Topic subscription)
+  await FirebaseNotificationService().initialize();
 
   // 🌱 TEK SEFERLİK VERİTABANI SEED İŞLEMİ
   // ⚠️ Production'da bu kodu kaldırın!
@@ -100,6 +121,18 @@ class MyApp extends StatelessWidget {
           ),
         ),
         home: const AuthWrapper(),
+        onGenerateRoute: (settings) {
+          // Profile route with dynamic userId argument
+          if (settings.name == '/profile') {
+            final userId = settings.arguments as String?;
+            if (userId != null) {
+              return MaterialPageRoute(
+                builder: (context) => ProfileScreen(userId: userId),
+              );
+            }
+          }
+          return null; // Let routes table handle it
+        },
         routes: {
           '/login': (context) => const LoginScreen(),
           '/register': (context) => const RegistrationScreen(),

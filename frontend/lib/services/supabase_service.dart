@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Supabase Service - PostgreSQL veritabanı ve real-time chat işlemleri
@@ -113,6 +115,49 @@ class SupabaseService {
     } catch (e) {
       print('Get user error: $e');
       return null;
+    }
+  }
+
+  /// Keşfet için tüm kullanıcıları getir (kendisi hariç)
+  Future<List<Map<String, dynamic>>> getAllUsers() async {
+    try {
+      final currentUserId = client.auth.currentUser?.id;
+      final query = client.from('users').select();
+
+      if (currentUserId != null) {
+        // Kendini hariç tut ve sadece aktif kullanıcıları getir
+        // ignore: deprecated_member_use
+        return await query
+            .neq('id', currentUserId)
+            .order('created_at', ascending: false)
+            .limit(50);
+      }
+
+      return await query.limit(50);
+    } catch (e) {
+      print('Get all users error: $e');
+      return [];
+    }
+  }
+
+  /// Kullanıcı ara (username veya email ile)
+  Future<List<Map<String, dynamic>>> searchUsers(String query) async {
+    try {
+      if (query.isEmpty) return [];
+
+      final currentUserId = client.auth.currentUser?.id;
+
+      final response = await client
+          .from('users')
+          .select()
+          .ilike('username', '%$query%') // Case-insensitive search
+          .neq('id', currentUserId ?? '') // Kendini hariç tut
+          .limit(20);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Search users error: $e');
+      return [];
     }
   }
 
@@ -369,4 +414,177 @@ class SupabaseService {
       return false;
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PROFILE MANAGEMENT METHODS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Mevcut giriş yapmış kullanıcı bilgilerini getir
+  Future<Map<String, dynamic>?> getCurrentUser() async {
+    try {
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) return null;
+      return await getUser(userId);
+    } catch (e) {
+      print('❌ getCurrentUser error: $e');
+      return null;
+    }
+  }
+
+  /// Profil bilgilerini güncelle
+  /// Desteklenen alanlar: username, bio, age, city, interests
+  Future<Map<String, dynamic>?> updateProfile({
+    String? username,
+    String? bio,
+    int? age,
+    String? city,
+    List<String>? interests,
+    String? avatarUrl,
+  }) async {
+    try {
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) {
+        print('❌ Kullanıcı oturumu bulunamadı');
+        return null;
+      }
+
+      // Sadece null olmayan değerleri güncelle
+      final Map<String, dynamic> updates = {};
+      if (username != null) updates['username'] = username;
+      if (bio != null) updates['bio'] = bio;
+      if (age != null) updates['age'] = age;
+      if (city != null) updates['city'] = city;
+      if (interests != null) updates['interests'] = interests;
+      if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
+
+      if (updates.isEmpty) {
+        print('⚠️ Güncellenecek alan yok');
+        return await getUser(userId);
+      }
+
+      print('🔄 Profil güncelleniyor: $updates');
+
+      final response = await client
+          .from('users')
+          .update(updates)
+          .eq('id', userId)
+          .select()
+          .single();
+
+      print('✅ Profil güncellendi');
+      return response;
+    } on PostgrestException catch (e) {
+      print('❌ Profil güncelleme PostgreSQL hatası: ${e.message}');
+      // Sütun yoksa hata mesajı
+      if (e.message.contains('column') &&
+          e.message.contains('does not exist')) {
+        print(
+          '⚠️ Veritabanında bazı sütunlar eksik olabilir (age, city, interests)',
+        );
+      }
+      return null;
+    } catch (e) {
+      print('❌ Profil güncelleme hatası: $e');
+      return null;
+    }
+  }
+
+  /// Profil fotoğrafını Supabase Storage'a yükle
+  /// Dönen değer: Public URL
+  Future<String?> uploadProfilePhoto(String filePath) async {
+    try {
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) {
+        print('❌ Kullanıcı oturumu bulunamadı');
+        return null;
+      }
+
+      final fileBytes = await _readFileAsBytes(filePath);
+      if (fileBytes == null) {
+        print('❌ Dosya okunamadı: $filePath');
+        return null;
+      }
+
+      // Dosya adı: avatars/userId_timestamp.jpg
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final extension = filePath.split('.').last.toLowerCase();
+      final fileName = 'avatars/${userId}_$timestamp.$extension';
+
+      print('📤 Fotoğraf yükleniyor: $fileName');
+
+      // Storage'a yükle (varsa üzerine yaz)
+      await client.storage
+          .from('profile-photos')
+          .uploadBinary(
+            fileName,
+            fileBytes,
+            fileOptions: FileOptions(
+              contentType: 'image/${extension == 'png' ? 'png' : 'jpeg'}',
+              upsert: true,
+            ),
+          );
+
+      // Public URL al
+      final publicUrl = client.storage
+          .from('profile-photos')
+          .getPublicUrl(fileName);
+
+      print('✅ Fotoğraf yüklendi: $publicUrl');
+
+      // Users tablosunu güncelle
+      await updateProfile(avatarUrl: publicUrl);
+
+      return publicUrl;
+    } catch (e) {
+      print('❌ Fotoğraf yükleme hatası: $e');
+      return null;
+    }
+  }
+
+  /// Dosyayı byte olarak oku
+  Future<Uint8List?> _readFileAsBytes(String filePath) async {
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) {
+        print('❌ Dosya bulunamadı: $filePath');
+        return null;
+      }
+      return await file.readAsBytes();
+    } catch (e) {
+      print('❌ Dosya okuma hatası: $e');
+      return null;
+    }
+  }
+
+  /// İlgi alanlarını liste olarak getir
+  List<String> parseInterests(dynamic interests) {
+    if (interests == null) return [];
+    if (interests is List) {
+      return interests.map((e) => e.toString()).toList();
+    }
+    if (interests is String) {
+      // Virgülle ayrılmış string ise
+      return interests.split(',').map((e) => e.trim()).toList();
+    }
+    return [];
+  }
+
+  /// Popüler ilgi alanları listesi (öneriler için)
+  static const List<String> popularInterests = [
+    '🎮 Oyun',
+    '🎵 Müzik',
+    '📚 Kitap',
+    '🎬 Film',
+    '⚽ Spor',
+    '🎨 Sanat',
+    '✈️ Seyahat',
+    '🍳 Yemek',
+    '💻 Teknoloji',
+    '📷 Fotoğrafçılık',
+    '🏋️ Fitness',
+    '🎸 Gitar',
+    '🐾 Hayvanlar',
+    '🌿 Doğa',
+    '🎭 Tiyatro',
+  ];
 }

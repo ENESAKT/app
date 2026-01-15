@@ -1,21 +1,30 @@
 import 'package:flutter/material.dart';
 
+/// Arkadaşlık durumu enum
+enum FriendStatus {
+  none, // Henüz arkadaş değil
+  pending, // İstek gönderildi (beklemede)
+  received, // İstek geldi (kabul bekliyor)
+  friends, // Arkadaşlar
+}
+
 /// UserTile - Kullanıcı listesi bileşeni
 ///
 /// Uses:
 /// - Followers/Following listesi
 /// - Arama sonuçları
 /// - Önerilen kullanıcılar
-class UserTile extends StatelessWidget {
+/// - Keşfet sayfası
+class UserTile extends StatefulWidget {
   final String userId;
   final String username;
   final String? avatarUrl;
   final String? subtitle;
-  final bool isFollowing;
-  final bool showFollowButton;
+  final FriendStatus friendStatus;
+  final bool showFriendButton;
   final bool isVerified;
   final VoidCallback? onTap;
-  final VoidCallback? onFollowTap;
+  final Future<void> Function()? onFriendAction;
 
   const UserTile({
     super.key,
@@ -23,78 +32,186 @@ class UserTile extends StatelessWidget {
     required this.username,
     this.avatarUrl,
     this.subtitle,
-    this.isFollowing = false,
-    this.showFollowButton = true,
+    this.friendStatus = FriendStatus.none,
+    this.showFriendButton = true,
     this.isVerified = false,
     this.onTap,
-    this.onFollowTap,
+    this.onFriendAction,
   });
+
+  @override
+  State<UserTile> createState() => _UserTileState();
+}
+
+class _UserTileState extends State<UserTile> {
+  bool _isLoading = false;
+  late FriendStatus _currentStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentStatus = widget.friendStatus;
+  }
+
+  @override
+  void didUpdateWidget(UserTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.friendStatus != widget.friendStatus) {
+      _currentStatus = widget.friendStatus;
+    }
+  }
+
+  Future<void> _handleFriendAction() async {
+    if (_isLoading || widget.onFriendAction == null) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await widget.onFriendAction!();
+      // Status güncelleme: none -> pending
+      if (_currentStatus == FriendStatus.none) {
+        setState(() => _currentStatus = FriendStatus.pending);
+      }
+    } catch (e) {
+      print('❌ Friend action error: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      onTap: onTap,
+      onTap: widget.onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: CircleAvatar(
-        radius: 24,
-        backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl!) : null,
-        backgroundColor: Colors.grey.shade200,
-        child: avatarUrl == null
-            ? Text(
-                username.isNotEmpty ? username[0].toUpperCase() : 'U',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.deepPurple,
-                ),
-              )
-            : null,
+      leading: GestureDetector(
+        onTap: widget.onTap,
+        child: CircleAvatar(
+          radius: 24,
+          backgroundImage: widget.avatarUrl != null
+              ? NetworkImage(widget.avatarUrl!)
+              : null,
+          backgroundColor: Colors.grey.shade200,
+          child: widget.avatarUrl == null
+              ? Text(
+                  widget.username.isNotEmpty
+                      ? widget.username[0].toUpperCase()
+                      : 'U',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepPurple,
+                  ),
+                )
+              : null,
+        ),
       ),
       title: Row(
         children: [
           Flexible(
             child: Text(
-              username,
+              widget.username,
               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (isVerified) ...[
+          if (widget.isVerified) ...[
             const SizedBox(width: 4),
             const Icon(Icons.verified, size: 14, color: Colors.blue),
           ],
         ],
       ),
-      subtitle: subtitle != null
+      subtitle: widget.subtitle != null
           ? Text(
-              subtitle!,
+              widget.subtitle!,
               style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             )
           : null,
-      trailing: showFollowButton ? _buildFollowButton() : null,
+      trailing: widget.showFriendButton ? _buildFriendButton() : null,
     );
   }
 
-  Widget _buildFollowButton() {
-    return SizedBox(
-      height: 32,
-      child: ElevatedButton(
-        onPressed: onFollowTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isFollowing ? Colors.white : Colors.deepPurple,
-          foregroundColor: isFollowing ? Colors.black : Colors.white,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          side: isFollowing
-              ? BorderSide(color: Colors.grey.shade300)
-              : BorderSide.none,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  Widget _buildFriendButton() {
+    // İkon ve stil seçimi
+    IconData icon;
+    Color bgColor;
+    Color iconColor;
+    String? tooltip;
+
+    switch (_currentStatus) {
+      case FriendStatus.friends:
+        icon = Icons.check_circle;
+        bgColor = Colors.green.withOpacity(0.1);
+        iconColor = Colors.green;
+        tooltip = 'Arkadaşsınız';
+        break;
+      case FriendStatus.pending:
+        icon = Icons.hourglass_empty;
+        bgColor = Colors.orange.withOpacity(0.1);
+        iconColor = Colors.orange;
+        tooltip = 'İstek Gönderildi';
+        break;
+      case FriendStatus.received:
+        icon = Icons.person_add;
+        bgColor = Colors.blue.withOpacity(0.1);
+        iconColor = Colors.blue;
+        tooltip = 'İsteği Kabul Et';
+        break;
+      case FriendStatus.none:
+        icon = Icons.person_add_alt_1;
+        bgColor = Colors.deepPurple.withOpacity(0.1);
+        iconColor = Colors.deepPurple;
+        tooltip = 'Arkadaş Ekle';
+    }
+
+    // Loading durumu
+    if (_isLoading) {
+      return Container(
+        width: 40,
+        height: 40,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(12),
         ),
-        child: Text(
-          isFollowing ? 'Takipte' : 'Takip Et',
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        child: const CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+
+    // Arkadaşsa sadece göster, tıklanamaz
+    if (_currentStatus == FriendStatus.friends) {
+      return Tooltip(
+        message: tooltip,
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: iconColor, size: 22),
+        ),
+      );
+    }
+
+    // Tıklanabilir buton
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: _handleFriendAction,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: iconColor, size: 22),
         ),
       ),
     );
@@ -287,7 +404,7 @@ class SuggestionCard extends StatelessWidget {
                 ),
               ),
               child: Text(
-                isFollowing ? 'Takipte' : 'Takip Et',
+                isFollowing ? 'Arkadaşsınız' : 'Arkadaş Ekle',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
