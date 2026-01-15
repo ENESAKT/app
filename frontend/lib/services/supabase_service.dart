@@ -757,4 +757,262 @@ class SupabaseService {
       return [];
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // YENİ ARKADAŞLİK METODLARİ - Current User Otomatik
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Arkadaşlık isteği gönder (mevcut kullanıcıdan toUserId'ye)
+  /// [toUserId] - Arkadaşlık isteği gönderilecek kullanıcının ID'si
+  Future<bool> sendFriendRequestTo(String toUserId) async {
+    try {
+      final currentUserId = client.auth.currentUser?.id;
+      if (currentUserId == null) {
+        print('❌ Arkadaşlık isteği hatası: Kullanıcı oturumu bulunamadı');
+        return false;
+      }
+
+      // User ID'leri sırala (küçük olan önce - veritabanı tutarlılığı için)
+      final userId1 = currentUserId.compareTo(toUserId) < 0
+          ? currentUserId
+          : toUserId;
+      final userId2 = currentUserId.compareTo(toUserId) < 0
+          ? toUserId
+          : currentUserId;
+
+      // Önce mevcut bir kayıt var mı kontrol et
+      final existing = await client
+          .from('friendships')
+          .select()
+          .eq('user_id_1', userId1)
+          .eq('user_id_2', userId2)
+          .maybeSingle();
+
+      if (existing != null) {
+        print('⚠️ Bu kullanıcıyla zaten bir arkadaşlık kaydı mevcut');
+        return false;
+      }
+
+      await client.from('friendships').insert({
+        'user_id_1': userId1,
+        'user_id_2': userId2,
+        'status': 'pending',
+        'requested_by': currentUserId,
+      });
+
+      print('✅ Arkadaşlık isteği gönderildi: $currentUserId -> $toUserId');
+      return true;
+    } catch (e) {
+      print('❌ Arkadaşlık isteği gönderme hatası: $e');
+      return false;
+    }
+  }
+
+  /// Arkadaşlık isteğini kabul et (fromUserId'den gelen isteği)
+  /// [fromUserId] - İsteği gönderen kullanıcının ID'si
+  Future<bool> acceptFriendRequestFrom(String fromUserId) async {
+    try {
+      final currentUserId = client.auth.currentUser?.id;
+      if (currentUserId == null) {
+        print('❌ İstek kabul hatası: Kullanıcı oturumu bulunamadı');
+        return false;
+      }
+
+      // User ID'leri sırala
+      final userId1 = currentUserId.compareTo(fromUserId) < 0
+          ? currentUserId
+          : fromUserId;
+      final userId2 = currentUserId.compareTo(fromUserId) < 0
+          ? fromUserId
+          : currentUserId;
+
+      // İlgili pending kaydı bul
+      final existingRequest = await client
+          .from('friendships')
+          .select()
+          .eq('user_id_1', userId1)
+          .eq('user_id_2', userId2)
+          .eq('status', 'pending')
+          .eq('requested_by', fromUserId)
+          .maybeSingle();
+
+      if (existingRequest == null) {
+        print('⚠️ Kabul edilecek pending istek bulunamadı');
+        return false;
+      }
+
+      // Status'u accepted olarak güncelle
+      await client
+          .from('friendships')
+          .update({'status': 'accepted'})
+          .eq('id', existingRequest['id']);
+
+      print('✅ Arkadaşlık isteği kabul edildi: $fromUserId -> $currentUserId');
+      return true;
+    } catch (e) {
+      print('❌ Arkadaşlık isteği kabul hatası: $e');
+      return false;
+    }
+  }
+
+  /// Arkadaşlık durumunu kontrol et (mevcut kullanıcı ve otherUserId arasında)
+  /// Returns: 'none', 'pending_sent', 'pending_received', 'accepted'
+  Future<String> getFriendshipStatusWith(String otherUserId) async {
+    try {
+      final currentUserId = client.auth.currentUser?.id;
+      if (currentUserId == null) {
+        print('❌ Durum kontrol hatası: Kullanıcı oturumu bulunamadı');
+        return 'none';
+      }
+
+      // ID'leri sırala
+      final userId1 = currentUserId.compareTo(otherUserId) < 0
+          ? currentUserId
+          : otherUserId;
+      final userId2 = currentUserId.compareTo(otherUserId) < 0
+          ? otherUserId
+          : currentUserId;
+
+      final result = await client
+          .from('friendships')
+          .select()
+          .eq('user_id_1', userId1)
+          .eq('user_id_2', userId2)
+          .maybeSingle();
+
+      // Kayıt yoksa 'none' döndür
+      if (result == null) {
+        return 'none';
+      }
+
+      final status = result['status']?.toString() ?? 'none';
+      final requestedBy = result['requested_by']?.toString();
+
+      // Durumu belirle
+      if (status == 'accepted') {
+        return 'accepted';
+      } else if (status == 'pending') {
+        // İsteği kim gönderdi?
+        return requestedBy == currentUserId
+            ? 'pending_sent'
+            : 'pending_received';
+      }
+
+      return status;
+    } catch (e) {
+      print('❌ Arkadaşlık durumu kontrol hatası: $e');
+      return 'none';
+    }
+  }
+
+  /// Kabul edilmiş arkadaşları profil bilgileriyle birlikte getir (mevcut kullanıcı için)
+  /// public.users tablosundan join yaparak profil bilgilerini döndürür
+  Future<List<Map<String, dynamic>>> getAcceptedFriendsWithProfiles() async {
+    try {
+      final currentUserId = client.auth.currentUser?.id;
+      if (currentUserId == null) {
+        print('❌ Arkadaş listesi hatası: Kullanıcı oturumu bulunamadı');
+        return [];
+      }
+
+      print(
+        '👥 Kabul edilmiş arkadaşlar alınıyor (profil bilgileriyle): $currentUserId',
+      );
+
+      final friendships = await client
+          .from('friendships')
+          .select('*, user1:user_id_1(*), user2:user_id_2(*)')
+          .eq('status', 'accepted')
+          .or('user_id_1.eq.$currentUserId,user_id_2.eq.$currentUserId');
+
+      // Karşı tarafın profil bilgilerini çıkar
+      List<Map<String, dynamic>> friends = [];
+      for (var friendship in friendships) {
+        final user1 = friendship['user1'];
+        final user2 = friendship['user2'];
+
+        Map<String, dynamic>? friendProfile;
+        if (user1 != null && user1['id'] != currentUserId) {
+          friendProfile = Map<String, dynamic>.from(user1);
+        } else if (user2 != null && user2['id'] != currentUserId) {
+          friendProfile = Map<String, dynamic>.from(user2);
+        }
+
+        // Null ve bozuk veri kontrolü
+        if (friendProfile != null &&
+            friendProfile['id'] != null &&
+            friendProfile['username'] != null &&
+            friendProfile['username'].toString().isNotEmpty) {
+          friends.add(friendProfile);
+        }
+      }
+
+      print(
+        '✅ ${friends.length} kabul edilmiş arkadaş bulundu (profilleriyle)',
+      );
+      return friends;
+    } catch (e) {
+      print('❌ Arkadaş listesi alma hatası: $e');
+      return [];
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SIMPLIFIED MESSAGING METHODS - Mevcut kullanıcıyı otomatik alır
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Basitleştirilmiş mesaj gönderme - Sadece alıcı ID ve içerik gerekli
+  /// Gönderen otomatik olarak mevcut kullanıcı olarak alınır
+  /// Returns: true = başarılı, false = başarısız (engelleme veya hata)
+  Future<bool> sendMessageSimple(String receiverId, String content) async {
+    try {
+      final currentUserId = client.auth.currentUser?.id;
+      if (currentUserId == null) {
+        print('❌ Mesaj gönderilemedi: Kullanıcı oturumu yok');
+        return false;
+      }
+
+      // Mevcut sendMessage metodunu kullan (engelleme kontrolü dahil)
+      return await sendMessage(
+        senderId: currentUserId,
+        receiverId: receiverId,
+        content: content,
+      );
+    } catch (e) {
+      print('❌ sendMessageSimple hatası: $e');
+      return false;
+    }
+  }
+
+  /// Basitleştirilmiş mesaj stream'i - Sadece karşı tarafın ID'si gerekli
+  /// Mevcut kullanıcı otomatik olarak alınır
+  /// Mesajlar created_at'a göre sıralanır (en yeni en altta)
+  Stream<List<Map<String, dynamic>>> getConversationStream(String otherUserId) {
+    final currentUserId = client.auth.currentUser?.id;
+
+    if (currentUserId == null) {
+      print('❌ Stream başlatılamadı: Kullanıcı oturumu yok');
+      // Boş stream döndür
+      return Stream.value([]);
+    }
+
+    print('📡 Konuşma stream\'i başlatılıyor: $currentUserId <-> $otherUserId');
+
+    return client
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: true) // En yeni en altta
+        .map((data) {
+          // Sadece bu iki kullanıcı arasındaki mesajları filtrele
+          final filtered = data.where((message) {
+            final senderId = message['sender_id'];
+            final receiverId = message['receiver_id'];
+            return (senderId == currentUserId && receiverId == otherUserId) ||
+                (senderId == otherUserId && receiverId == currentUserId);
+          }).toList();
+
+          print('📨 Stream güncellendi: ${filtered.length} mesaj');
+          return List<Map<String, dynamic>>.from(filtered);
+        });
+  }
 }

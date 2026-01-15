@@ -19,7 +19,12 @@ class _DiscoverViewState extends State<DiscoverView> {
 
   List<UserModel> _allUsers = [];
   List<UserModel> _filteredUsers = []; // Arama sonucu gösterilecekler
-  List<Map<String, dynamic>> _myFriendships = [];
+
+  // Arkadaşlık durumu cache (userId -> status)
+  // O(1) lookup için Map kullanıyoruz
+  final Map<String, String> _friendshipStatusCache = {};
+  final Map<String, dynamic> _friendshipIdCache =
+      {}; // Kabul için ID gerekli (int veya String olabilir)
 
   bool _isLoading = true;
   String? _currentUserId;
@@ -61,21 +66,49 @@ class _DiscoverViewState extends State<DiscoverView> {
 
     try {
       // 1. Tüm kullanıcıları getir (Kendim hariç)
-      // SupabaseService'deki getAllUsers metodu zaten kendimi ve limit 50'yi hallediyor.
-      // Ancak pagination yok, simple start.
       final usersData = await _supabaseService.getAllUsers();
       final users = usersData.map((e) => UserModel.fromJson(e)).toList();
 
-      // 2. Arkadaşlık durumlarını getir
+      // 2. Arkadaşlık durumlarını getir ve cache'e yükle
       final friendships = await _supabaseService.getMyFriendships(
         _currentUserId!,
       );
+
+      // Cache'i temizle ve yeniden doldur
+      _friendshipStatusCache.clear();
+      _friendshipIdCache.clear();
+
+      for (final f in friendships) {
+        final u1 = f['user_id_1'];
+        final u2 = f['user_id_2'];
+        final status = f['status'];
+        final requestedBy = f['requested_by'];
+        final id = f['id'];
+
+        // Karşı tarafın ID'sini bul
+        final otherUserId = (u1 == _currentUserId) ? u2 : u1;
+
+        // Durumu belirle
+        String friendshipStatus;
+        if (status == 'accepted') {
+          friendshipStatus = 'accepted';
+        } else if (status == 'pending') {
+          friendshipStatus = (requestedBy == _currentUserId)
+              ? 'pending_sent'
+              : 'pending_received';
+        } else {
+          friendshipStatus = 'none';
+        }
+
+        // Cache'e ekle
+        _friendshipStatusCache[otherUserId] = friendshipStatus;
+        _friendshipIdCache[otherUserId] = id;
+      }
 
       if (mounted) {
         setState(() {
           _allUsers = users;
           _filteredUsers = users;
-          _myFriendships = friendships;
           _isLoading = false;
         });
       }
@@ -85,32 +118,15 @@ class _DiscoverViewState extends State<DiscoverView> {
     }
   }
 
-  /// Bir kullanıcıyla olan arkadaşlık durumunu bul
+  /// Bir kullanıcıyla olan arkadaşlık durumunu bul (O(1) cache lookup)
   /// Return: 'none', 'pending_sent', 'pending_received', 'accepted'
   String _getFriendshipStatus(String otherUserId) {
-    if (_currentUserId == null) return 'none';
+    return _friendshipStatusCache[otherUserId] ?? 'none';
+  }
 
-    // Local listede ara
-    final friendship = _myFriendships.firstWhere((f) {
-      final u1 = f['user_id_1'];
-      final u2 = f['user_id_2'];
-      return (u1 == _currentUserId && u2 == otherUserId) ||
-          (u1 == otherUserId && u2 == _currentUserId);
-    }, orElse: () => {});
-
-    if (friendship.isEmpty) return 'none';
-
-    final status = friendship['status'];
-    final requestedBy = friendship['requested_by'];
-
-    if (status == 'accepted') return 'accepted';
-    if (status == 'pending') {
-      return requestedBy == _currentUserId
-          ? 'pending_sent'
-          : 'pending_received';
-    }
-
-    return 'none';
+  /// Arkadaşlık ID'sini cache'den getir (kabul işlemi için)
+  int? _getFriendshipId(String otherUserId) {
+    return _friendshipIdCache[otherUserId];
   }
 
   Future<void> _handleFriendAction(UserModel user, String status) async {
@@ -134,26 +150,21 @@ class _DiscoverViewState extends State<DiscoverView> {
           );
         }
       } else if (status == 'pending_received') {
-        // İsteği kabul et
-        // Önce friendship id'yi bulmamız lazım. _getFriendshipStatus sadece string dönüyor,
-        // burada raw datadan ID'yi bulalım.
-        final friendship = _myFriendships.firstWhere((f) {
-          final u1 = f['user_id_1'];
-          final u2 = f['user_id_2'];
-          return (u1 == _currentUserId && u2 == user.id) ||
-              (u1 == user.id && u2 == _currentUserId);
-        });
+        // İsteği kabul et - Cache'den friendship ID'yi al
+        final friendshipId = _getFriendshipId(user.id);
 
-        if (friendship.isNotEmpty && friendship['id'] != null) {
+        if (friendshipId != null) {
           final success = await _supabaseService.acceptFriendRequest(
-            friendship['id'],
+            friendshipId.toString(), // String'e çevir
           );
           if (success) {
             await _fetchData();
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text('Artık arkadaşsınız!')));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Artık arkadaşsınız!')),
+            );
           }
+        } else {
+          print('⚠️ Friendship ID bulunamadı: ${user.id}');
         }
       } else if (status == 'accepted') {
         // Sohbete git
@@ -392,22 +403,22 @@ class _DiscoverViewState extends State<DiscoverView> {
 
     switch (status) {
       case 'accepted':
-        icon = Icons.chat_bubble_outline;
+        icon = Icons.message_rounded; // Sohbete git
         color = Colors.blue;
         break;
       case 'pending_received':
-        icon = Icons.check;
+        icon = Icons.check_circle_outline; // İsteği kabul et
         color = Colors.green;
         break;
       case 'pending_sent':
-        icon = Icons.hourglass_empty;
+        icon = Icons.hourglass_empty; // Beklemede (pasif)
         color = Colors.grey;
         disabled = true;
         break;
       case 'none':
       default:
-        icon = Icons.add;
-        color = Colors.white; // Buton arka planı siyah/renkli ise ikon beyaz
+        icon = Icons.person_add_rounded; // Arkadaş ekle
+        color = Colors.white;
         break;
     }
 
@@ -422,7 +433,7 @@ class _DiscoverViewState extends State<DiscoverView> {
           backgroundColor: Colors.white,
           mini: true,
           elevation: 2,
-          child: Icon(Icons.add, color: Colors.black),
+          child: const Icon(Icons.person_add_rounded, color: Colors.black),
         ),
       );
     }
