@@ -94,8 +94,8 @@ class _DiscoverViewState extends State<DiscoverView> {
           friendshipStatus = 'accepted';
         } else if (status == 'pending') {
           friendshipStatus = (requestedBy == _currentUserId)
-              ? 'pending_sent'
-              : 'pending_received';
+              ? 'sent_pending'
+              : 'received_pending';
         } else {
           friendshipStatus = 'none';
         }
@@ -136,24 +136,42 @@ class _DiscoverViewState extends State<DiscoverView> {
   Future<void> _handleFriendAction(UserModel user, String status) async {
     if (_currentUserId == null) return;
 
-    // pending_sent ise işlem yok (disabled buton)
-    if (status == 'pending_sent') return;
+    // sent_pending ise işlem yok, sadece bilgilendirme
+    if (status == 'sent_pending') {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('İstek zaten gönderildi')));
+      return;
+    }
 
     try {
       if (status == 'none') {
+        // Önce UI'ı anında güncelle
+        setState(() {
+          _friendshipStatusCache[user.id] = 'sent_pending';
+        });
+
         // İstek gönder
         final success = await _supabaseService.sendFriendRequest(
           _currentUserId!,
           user.id,
         );
         if (success) {
-          // Local update
-          await _fetchData(); // Basit refresh, idealde listeyi manipüle ederdik
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('${user.displayName}\'e istek gönderildi')),
           );
+        } else {
+          // Hata durumunda eski duruma geri dön
+          setState(() {
+            _friendshipStatusCache[user.id] = 'none';
+          });
         }
-      } else if (status == 'pending_received') {
+      } else if (status == 'received_pending') {
+        // Önce UI'ı anında güncelle
+        setState(() {
+          _friendshipStatusCache[user.id] = 'accepted';
+        });
+
         // İsteği kabul et - Cache'den friendship ID'yi al
         final friendshipId = _getFriendshipId(user.id);
 
@@ -162,13 +180,21 @@ class _DiscoverViewState extends State<DiscoverView> {
             friendshipId.toString(), // String'e çevir
           );
           if (success) {
-            await _fetchData();
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Artık arkadaşsınız!')),
             );
+          } else {
+            // Hata durumunda eski duruma geri dön
+            setState(() {
+              _friendshipStatusCache[user.id] = 'received_pending';
+            });
           }
         } else {
           print('⚠️ Friendship ID bulunamadı: ${user.id}');
+          // Hata durumunda eski duruma geri dön
+          setState(() {
+            _friendshipStatusCache[user.id] = 'received_pending';
+          });
         }
       } else if (status == 'accepted') {
         // Sohbete git
@@ -445,26 +471,26 @@ class _DiscoverViewState extends State<DiscoverView> {
 
     switch (status) {
       case 'accepted':
-        icon = Icons.message_rounded; // Sohbete git
-        color = Colors.blue;
-        break;
-      case 'pending_received':
-        icon = Icons.check_circle_outline; // İsteği kabul et
+        icon = Icons.chat_bubble_rounded; // Mesaj (Chat)
         color = Colors.green;
         break;
-      case 'pending_sent':
-        icon = Icons.hourglass_empty; // Beklemede (pasif)
+      case 'received_pending':
+        icon = Icons.check_circle_rounded; // Onayla (CheckCircle)
+        color = Colors.orange;
+        break;
+      case 'sent_pending':
+        icon = Icons.hourglass_empty_rounded; // Kum saati (Hourglass)
         color = Colors.grey;
         disabled = true;
         break;
       case 'none':
       default:
-        icon = Icons.person_add_rounded; // Arkadaş ekle
-        color = Colors.white;
+        icon = Icons.person_add_rounded; // Ekle (PersonAdd)
+        color = Colors.blue;
         break;
     }
 
-    // Eğer none/add ise, buton daha belirgin olsun diye farklı style
+    // Eğer none/add ise, buton daha belirgin olsun diye farklı style (Mavi ikon)
     if (status == 'none') {
       return SizedBox(
         width: 40,
@@ -475,7 +501,7 @@ class _DiscoverViewState extends State<DiscoverView> {
           backgroundColor: Colors.white,
           mini: true,
           elevation: 2,
-          child: const Icon(Icons.person_add_rounded, color: Colors.black),
+          child: const Icon(Icons.person_add_rounded, color: Colors.blue),
         ),
       );
     }

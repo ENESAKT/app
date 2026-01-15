@@ -827,6 +827,7 @@ class SupabaseService {
 
   /// Arkadaşlık isteği gönder (mevcut kullanıcıdan toUserId'ye)
   /// [toUserId] - Arkadaşlık isteği gönderilecek kullanıcının ID'si
+  /// Insert: user_id_1 = BEN, user_id_2 = O, requested_by = BEN, status = 'pending'
   Future<bool> sendFriendRequestTo(String toUserId) async {
     try {
       final currentUserId = client.auth.currentUser?.id;
@@ -835,20 +836,13 @@ class SupabaseService {
         return false;
       }
 
-      // User ID'leri sırala (küçük olan önce - veritabanı tutarlılığı için)
-      final userId1 = currentUserId.compareTo(toUserId) < 0
-          ? currentUserId
-          : toUserId;
-      final userId2 = currentUserId.compareTo(toUserId) < 0
-          ? toUserId
-          : currentUserId;
-
-      // Önce mevcut bir kayıt var mı kontrol et
+      // Önce mevcut bir kayıt var mı kontrol et (her iki yönde)
       final existing = await client
           .from('friendships')
           .select()
-          .eq('user_id_1', userId1)
-          .eq('user_id_2', userId2)
+          .or(
+            'and(user_id_1.eq.$currentUserId,user_id_2.eq.$toUserId),and(user_id_1.eq.$toUserId,user_id_2.eq.$currentUserId)',
+          )
           .maybeSingle();
 
       if (existing != null) {
@@ -856,9 +850,10 @@ class SupabaseService {
         return false;
       }
 
+      // user_id_1 = BEN, user_id_2 = O, requested_by = BEN
       await client.from('friendships').insert({
-        'user_id_1': userId1,
-        'user_id_2': userId2,
+        'user_id_1': currentUserId,
+        'user_id_2': toUserId,
         'status': 'pending',
         'requested_by': currentUserId,
       });
@@ -871,9 +866,10 @@ class SupabaseService {
     }
   }
 
-  /// Arkadaşlık isteğini kabul et (fromUserId'den gelen isteği)
-  /// [fromUserId] - İsteği gönderen kullanıcının ID'si
-  Future<bool> acceptFriendRequestFrom(String fromUserId) async {
+  /// Arkadaşlık isteğini kabul et (otherUserId'den gelen isteği)
+  /// [otherUserId] - İsteği gönderen kullanıcının ID'si
+  /// OR filtresi ile her iki yönde arar ve status = 'accepted' yapar
+  Future<bool> acceptFriendRequestFrom(String otherUserId) async {
     try {
       final currentUserId = client.auth.currentUser?.id;
       if (currentUserId == null) {
@@ -881,22 +877,14 @@ class SupabaseService {
         return false;
       }
 
-      // User ID'leri sırala
-      final userId1 = currentUserId.compareTo(fromUserId) < 0
-          ? currentUserId
-          : fromUserId;
-      final userId2 = currentUserId.compareTo(fromUserId) < 0
-          ? fromUserId
-          : currentUserId;
-
-      // İlgili pending kaydı bul
+      // İlgili pending kaydı bul (OR filtresi ile her iki yönde)
       final existingRequest = await client
           .from('friendships')
           .select()
-          .eq('user_id_1', userId1)
-          .eq('user_id_2', userId2)
+          .or(
+            'and(user_id_1.eq.$currentUserId,user_id_2.eq.$otherUserId),and(user_id_1.eq.$otherUserId,user_id_2.eq.$currentUserId)',
+          )
           .eq('status', 'pending')
-          .eq('requested_by', fromUserId)
           .maybeSingle();
 
       if (existingRequest == null) {
@@ -910,7 +898,7 @@ class SupabaseService {
           .update({'status': 'accepted'})
           .eq('id', existingRequest['id']);
 
-      print('✅ Arkadaşlık isteği kabul edildi: $fromUserId -> $currentUserId');
+      print('✅ Arkadaşlık isteği kabul edildi: $otherUserId -> $currentUserId');
       return true;
     } catch (e) {
       print('❌ Arkadaşlık isteği kabul hatası: $e');
@@ -919,7 +907,8 @@ class SupabaseService {
   }
 
   /// Arkadaşlık durumunu kontrol et (mevcut kullanıcı ve otherUserId arasında)
-  /// Returns: 'none', 'pending_sent', 'pending_received', 'accepted'
+  /// OR filtresi kullanır: (user_id_1 = BEN AND user_id_2 = O) OR (user_id_1 = O AND user_id_2 = BEN)
+  /// Returns: 'none', 'sent_pending', 'received_pending', 'accepted'
   Future<String> getFriendshipStatusWith(String otherUserId) async {
     try {
       final currentUserId = client.auth.currentUser?.id;
@@ -928,19 +917,13 @@ class SupabaseService {
         return 'none';
       }
 
-      // ID'leri sırala
-      final userId1 = currentUserId.compareTo(otherUserId) < 0
-          ? currentUserId
-          : otherUserId;
-      final userId2 = currentUserId.compareTo(otherUserId) < 0
-          ? otherUserId
-          : currentUserId;
-
+      // OR filtresi ile her iki yönde kayıt ara
       final result = await client
           .from('friendships')
           .select()
-          .eq('user_id_1', userId1)
-          .eq('user_id_2', userId2)
+          .or(
+            'and(user_id_1.eq.$currentUserId,user_id_2.eq.$otherUserId),and(user_id_1.eq.$otherUserId,user_id_2.eq.$currentUserId)',
+          )
           .maybeSingle();
 
       // Kayıt yoksa 'none' döndür
@@ -956,9 +939,11 @@ class SupabaseService {
         return 'accepted';
       } else if (status == 'pending') {
         // İsteği kim gönderdi?
+        // requested_by == BEN -> 'sent_pending' (İstek Gönderildi)
+        // requested_by != BEN -> 'received_pending' (İstek Geldi/Onayla)
         return requestedBy == currentUserId
-            ? 'pending_sent'
-            : 'pending_received';
+            ? 'sent_pending'
+            : 'received_pending';
       }
 
       return status;
