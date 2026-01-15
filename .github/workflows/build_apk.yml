@@ -53,21 +53,36 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
-      - name: � Update pubspec.yaml Version from Tag
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: 🏷 Update pubspec.yaml Version
         working-directory: ./frontend
         run: |
-          # Tag'den versiyon al (v1.0.7 -> 1.0.7)
-          TAG="${{ github.ref_name }}"
-          VERSION="${TAG#v}"
+          # ═══════════════════════════════════════════════════════════════════
+          # KRİTİK: Build number'ı HER ZAMAN github.run_number ile güncelle!
+          # Bu sayede APK'daki build number ile Supabase'deki build number
+          # her zaman eşleşir ve gereksiz güncelleme bildirimi çıkmaz.
+          # ═══════════════════════════════════════════════════════════════════
+          
           BUILD_NUMBER="${{ github.run_number }}"
           
-          echo "📌 Updating pubspec.yaml version to: ${VERSION}+${BUILD_NUMBER}"
+          # Tag varsa versiyonu tag'den al, yoksa mevcut versiyonu kullan
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+            VERSION="${TAG#v}"
+            echo "📌 Tag detected: Using version ${VERSION} from tag"
+          else
+            # Mevcut versiyonu oku (sadece versiyon kısmını, + öncesini)
+            CURRENT=$(grep "^version:" pubspec.yaml | sed 's/version: //' | cut -d'+' -f1)
+            VERSION="${CURRENT}"
+            echo "📌 No tag: Using existing version ${VERSION}"
+          fi
+          
+          echo "📦 Final version: ${VERSION}+${BUILD_NUMBER}"
           
           # pubspec.yaml'daki version satırını güncelle
           sed -i "s/^version: .*/version: ${VERSION}+${BUILD_NUMBER}/" pubspec.yaml
           
           # Doğrulama
+          echo "✅ Updated pubspec.yaml:"
           grep "^version:" pubspec.yaml
 
       - name: �🔧 Build APK (Release)
@@ -128,28 +143,46 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # =====================================================
-      # � SUPABASE APP_CONFIG TABLOSUNU GÜNCELLE
-      # Release sonrası otomatik çalışır (sadece v* tag)
+      # 🔄 SUPABASE APP_CONFIG TABLOSUNU GÜNCELLE
+      # HER BUILD'de çalışır - build number senkronizasyonu için
       # =====================================================
       - name: 🔄 Update Supabase app_config
-        if: startsWith(github.ref, 'refs/tags/')
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          VERSION: ${{ steps.version.outputs.version }}
-          TAG: ${{ github.ref_name }}
           REPO: ${{ github.repository }}
           BUILD_NUMBER: ${{ github.run_number }}
         run: |
-          # APK indirme linkini oluştur
-          DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/app-release.apk"
+          # ═══════════════════════════════════════════════════════════════════
+          # KRİTİK: Supabase'i HER BUILD'de güncelle!
+          # Bu sayede APK'daki build number ile Supabase'deki build number
+          # her zaman eşleşir ve gereksiz güncelleme bildirimi çıkmaz.
+          # ═══════════════════════════════════════════════════════════════════
           
+          # Version ve Download URL belirle
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+            VERSION="${TAG#v}"
+            DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/app-release.apk"
+            echo "📌 TAG build: Using release URL"
+          else
+            # Normal push - mevcut versiyonu kullan
+            VERSION=$(grep "^version:" frontend/pubspec.yaml | sed 's/version: //' | cut -d'+' -f1)
+            # Artifact için geçici URL (GitHub Releases yok)
+            DOWNLOAD_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
+            echo "📌 Normal push: Using actions run URL"
+          fi
+          
+          echo ""
+          echo "═══════════════════════════════════════════════════════"
           echo "📦 Supabase app_config güncelleniyor..."
+          echo "═══════════════════════════════════════════════════════"
           echo "   Current Version: ${VERSION}"
           echo "   Build Number: ${BUILD_NUMBER}"
           echo "   Download URL: ${DOWNLOAD_URL}"
+          echo "═══════════════════════════════════════════════════════"
           
-          # Supabase REST API ile PATCH isteği (id=1 olan satırı güncelle)
+          # Supabase REST API ile PATCH isteği
           HTTP_STATUS=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
             -X PATCH "${SUPABASE_URL}/rest/v1/app_config?id=eq.ea7ba3bf-f1c5-4361-becd-d5e42c62c975" \
             -H "apikey: ${SUPABASE_KEY}" \
@@ -163,10 +196,12 @@ jobs:
               \"is_force_update\": false
             }")
           
-          echo "� HTTP Status: ${HTTP_STATUS}"
+          echo "📊 HTTP Status: ${HTTP_STATUS}"
           
           if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
             echo "✅ Supabase app_config başarıyla güncellendi!"
+            echo ""
+            echo "📱 Artık uygulama build_number = ${BUILD_NUMBER} bekleyecek"
           else
             echo "❌ Supabase güncelleme hatası!"
             cat /tmp/response.txt
