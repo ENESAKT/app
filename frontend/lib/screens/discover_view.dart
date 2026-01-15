@@ -1,10 +1,11 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
-import '../services/friendship_service.dart';
-import 'profile_screen.dart';
+import '../models/user_model.dart';
+import 'user_profile_view.dart';
+import 'chat_detail_view.dart';
 
-/// Keşfet Ekranı - Diğer kullanıcıları keşfet ve arkadaşlık isteği gönder
 class DiscoverView extends StatefulWidget {
   const DiscoverView({super.key});
 
@@ -14,167 +15,235 @@ class DiscoverView extends StatefulWidget {
 
 class _DiscoverViewState extends State<DiscoverView> {
   final SupabaseService _supabaseService = SupabaseService();
-  final FriendshipService _friendshipService = FriendshipService();
+  final TextEditingController _searchController = TextEditingController();
 
-  List<Map<String, dynamic>> _users = [];
-  Map<String, String> _friendshipStatuses = {}; // userId -> status
+  List<UserModel> _allUsers = [];
+  List<UserModel> _filteredUsers = []; // Arama sonucu gösterilecekler
+  List<Map<String, dynamic>> _myFriendships = [];
+
   bool _isLoading = true;
-  String _searchQuery = '';
   String? _currentUserId;
-
-  // Tema renkleri
-  static const Color _primaryColor = Color(0xFF667eea);
-  static const Color _secondaryColor = Color(0xFF764ba2);
 
   @override
   void initState() {
     super.initState();
     _currentUserId = Supabase.instance.client.auth.currentUser?.id;
-    _loadUsers();
+    _fetchData();
+    _searchController.addListener(_onSearchChanged);
   }
 
-  Future<void> _loadUsers() async {
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    final query = _searchController.text.toLowerCase().trim();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredUsers = List.from(_allUsers);
+      } else {
+        _filteredUsers = _allUsers.where((user) {
+          final name = user.displayName.toLowerCase();
+          final city = (user.city ?? '').toLowerCase();
+          return name.contains(query) || city.contains(query);
+        }).toList();
+      }
+    });
+  }
+
+  Future<void> _fetchData() async {
+    if (_currentUserId == null) return;
+
     setState(() => _isLoading = true);
 
     try {
-      final users = _searchQuery.isEmpty
-          ? await _supabaseService.getAllUsers()
-          : await _supabaseService.searchUsers(_searchQuery);
+      // 1. Tüm kullanıcıları getir (Kendim hariç)
+      // SupabaseService'deki getAllUsers metodu zaten kendimi ve limit 50'yi hallediyor.
+      // Ancak pagination yok, simple start.
+      final usersData = await _supabaseService.getAllUsers();
+      final users = usersData.map((e) => UserModel.fromJson(e)).toList();
 
-      // Her kullanıcı için arkadaşlık durumunu kontrol et
-      await _loadFriendshipStatuses(users);
-
-      setState(() {
-        _users = users;
-        _isLoading = false;
-      });
-    } catch (e) {
-      print('❌ Load users error: $e');
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _loadFriendshipStatuses(List<Map<String, dynamic>> users) async {
-    if (_currentUserId == null) return;
-
-    Map<String, String> statuses = {};
-    for (var user in users) {
-      final userId = user['id'];
-      if (userId == null) continue;
-
-      final status = await _supabaseService.getFriendshipStatus(
+      // 2. Arkadaşlık durumlarını getir
+      final friendships = await _supabaseService.getMyFriendships(
         _currentUserId!,
-        userId,
       );
 
-      if (status != null) {
-        statuses[userId] = status['status'] ?? 'none';
-      } else {
-        statuses[userId] = 'none';
+      if (mounted) {
+        setState(() {
+          _allUsers = users;
+          _filteredUsers = users;
+          _myFriendships = friendships;
+          _isLoading = false;
+        });
       }
+    } catch (e) {
+      print('Discover data fetch error: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
-
-    _friendshipStatuses = statuses;
   }
 
-  Future<void> _sendFriendRequest(String toUserId) async {
+  /// Bir kullanıcıyla olan arkadaşlık durumunu bul
+  /// Return: 'none', 'pending_sent', 'pending_received', 'accepted'
+  String _getFriendshipStatus(String otherUserId) {
+    if (_currentUserId == null) return 'none';
+
+    // Local listede ara
+    final friendship = _myFriendships.firstWhere((f) {
+      final u1 = f['user_id_1'];
+      final u2 = f['user_id_2'];
+      return (u1 == _currentUserId && u2 == otherUserId) ||
+          (u1 == otherUserId && u2 == _currentUserId);
+    }, orElse: () => {});
+
+    if (friendship.isEmpty) return 'none';
+
+    final status = friendship['status'];
+    final requestedBy = friendship['requested_by'];
+
+    if (status == 'accepted') return 'accepted';
+    if (status == 'pending') {
+      return requestedBy == _currentUserId
+          ? 'pending_sent'
+          : 'pending_received';
+    }
+
+    return 'none';
+  }
+
+  Future<void> _handleFriendAction(UserModel user, String status) async {
     if (_currentUserId == null) return;
+
+    // pending_sent ise işlem yok (disabled buton)
+    if (status == 'pending_sent') return;
 
     try {
-      final success = await _friendshipService.sendFriendRequest(
-        fromUserId: _currentUserId!,
-        toUserId: toUserId,
-      );
-
-      if (success) {
-        setState(() {
-          _friendshipStatuses[toUserId] = 'pending_sent';
-        });
-
-        if (mounted) {
+      if (status == 'none') {
+        // İstek gönder
+        final success = await _supabaseService.sendFriendRequest(
+          _currentUserId!,
+          user.id,
+        );
+        if (success) {
+          // Local update
+          await _fetchData(); // Basit refresh, idealde listeyi manipüle ederdik
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Arkadaşlık isteği gönderildi! ✓'),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-            ),
+            SnackBar(content: Text('${user.displayName}\'e istek gönderildi')),
           );
         }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('İstek gönderilemedi: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
+      } else if (status == 'pending_received') {
+        // İsteği kabul et
+        // Önce friendship id'yi bulmamız lazım. _getFriendshipStatus sadece string dönüyor,
+        // burada raw datadan ID'yi bulalım.
+        final friendship = _myFriendships.firstWhere((f) {
+          final u1 = f['user_id_1'];
+          final u2 = f['user_id_2'];
+          return (u1 == _currentUserId && u2 == user.id) ||
+              (u1 == user.id && u2 == _currentUserId);
+        });
+
+        if (friendship.isNotEmpty && friendship['id'] != null) {
+          final success = await _supabaseService.acceptFriendRequest(
+            friendship['id'],
+          );
+          if (success) {
+            await _fetchData();
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Artık arkadaşsınız!')));
+          }
+        }
+      } else if (status == 'accepted') {
+        // Sohbete git
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatDetailView(
+              otherUserId: user.id,
+              otherUserName: user.displayName,
+              otherUserAvatar: user.avatarUrl,
+            ),
           ),
         );
       }
+    } catch (e) {
+      print('Action error: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Bir hata oluştu')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text(
-          'Keşfet 🌍',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: _primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(70),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: TextField(
-              onChanged: (value) {
-                setState(() => _searchQuery = value);
-                _loadUsers();
-              },
-              decoration: InputDecoration(
-                hintText: 'Kullanıcı ara...',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
+      backgroundColor: Colors.grey[50], // Hafif gri arka plan
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Search Bar
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
                 ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 14,
+                child: TextField(
+                  controller: _searchController,
+                  decoration: const InputDecoration(
+                    hintText: 'Yeni arkadaşlar bul...',
+                    prefixIcon: Icon(Icons.search, color: Colors.grey),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 15,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+
+            // Grid Content
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filteredUsers.isEmpty
+                  ? _buildEmptyState()
+                  : RefreshIndicator(
+                      onRefresh: _fetchData,
+                      child: GridView.builder(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2, // 2 sütun
+                              childAspectRatio:
+                                  0.75, // Dikey dikdörtgen kartlar
+                              crossAxisSpacing: 16,
+                              mainAxisSpacing: 16,
+                            ),
+                        itemCount: _filteredUsers.length,
+                        itemBuilder: (context, index) {
+                          return _buildUserCard(_filteredUsers[index]);
+                        },
+                      ),
+                    ),
+            ),
+          ],
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: _primaryColor))
-          : _users.isEmpty
-          ? _buildEmptyState()
-          : RefreshIndicator(
-              onRefresh: _loadUsers,
-              color: _primaryColor,
-              child: GridView.builder(
-                padding: const EdgeInsets.all(16),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.72,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                ),
-                itemCount: _users.length,
-                itemBuilder: (context, index) {
-                  final user = _users[index];
-                  return _buildUserCard(user);
-                },
-              ),
-            ),
     );
   }
 
@@ -183,251 +252,194 @@ class _DiscoverViewState extends State<DiscoverView> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.people_outline, size: 80, color: Colors.grey[300]),
+          Icon(Icons.person_search, size: 80, color: Colors.grey[300]),
           const SizedBox(height: 16),
           Text(
-            'Kullanıcı bulunamadı 😕',
-            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Farklı bir arama deneyin',
-            style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+            'Kullanıcı bulunamadı',
+            style: TextStyle(color: Colors.grey[500], fontSize: 16),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildUserCard(Map<String, dynamic> user) {
-    final userId = user['id'] ?? '';
-    final username = user['username'] ?? 'Kullanıcı';
-    final city = user['city'] ?? '';
-    final avatarUrl = user['avatar_url'];
-    final status = _friendshipStatuses[userId] ?? 'none';
+  Widget _buildUserCard(UserModel user) {
+    final status = _getFriendshipStatus(user.id);
 
     return GestureDetector(
       onTap: () {
+        // Profil detayına git
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ProfileScreen(userId: userId, isCurrentUser: false),
+            builder: (context) => UserProfileView(userId: user.id),
           ),
         );
       },
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
           borderRadius: BorderRadius.circular(20),
+          color: Colors.white,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.08),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        clipBehavior: Clip.antiAlias, // Köşeleri kırp
+        child: Stack(
+          fit: StackFit.expand,
           children: [
-            const SizedBox(height: 16),
+            // 1. Profil Resmi (Cover)
+            if (user.avatarUrl != null && user.avatarUrl!.isNotEmpty)
+              Image.network(
+                user.avatarUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) =>
+                    Container(color: Colors.grey[300]),
+              )
+            else
+              Container(
+                color: Colors.blueGrey[100],
+                child: const Icon(Icons.person, size: 50, color: Colors.white),
+              ),
 
-            // Avatar
-            Hero(
-              tag: 'avatar_$userId',
+            // 2. Siyah Gradient (Altta)
+            Align(
+              alignment: Alignment.bottomCenter,
               child: Container(
+                height: 120, // Gradient yüksekliği
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [_primaryColor, _secondaryColor],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.7), // Koyu siyah
+                      Colors.black.withOpacity(0.9),
+                    ],
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _primaryColor.withOpacity(0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(3),
-                child: CircleAvatar(
-                  radius: 40,
-                  backgroundColor: Colors.white,
-                  backgroundImage: avatarUrl != null
-                      ? NetworkImage(avatarUrl)
-                      : null,
-                  child: avatarUrl == null
-                      ? Text(
-                          username.isNotEmpty ? username[0].toUpperCase() : 'U',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: _primaryColor,
-                          ),
-                        )
-                      : null,
                 ),
               ),
             ),
 
-            const SizedBox(height: 12),
-
-            // Username
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                username,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.black87,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-              ),
-            ),
-
-            // City
-            if (city.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+            // 3. İsim ve Bilgiler (Gradient üstüne)
+            Positioned(
+              left: 12,
+              bottom: 12,
+              right: 60, // Buton için boşluk
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.location_on, size: 14, color: Colors.grey[500]),
-                  const SizedBox(width: 2),
                   Text(
-                    city,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    user.age != null
+                        ? '${user.displayName}, ${user.age}'
+                        : user.displayName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
+                  const SizedBox(height: 4),
+                  if (user.city != null && user.city!.isNotEmpty)
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on,
+                          size: 12,
+                          color: Colors.white70,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            user.city!,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
-            ],
-
-            const SizedBox(height: 12),
-
-            // Action Button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _buildActionButton(userId, status),
             ),
 
-            const SizedBox(height: 12),
+            // 4. Aksiyon Butonu (Sağ Alt)
+            Positioned(
+              right: 10,
+              bottom: 10,
+              child: _buildActionButton(user, status),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildActionButton(String userId, String status) {
+  Widget _buildActionButton(UserModel user, String status) {
+    IconData icon;
+    Color color;
+    bool disabled = false;
+
     switch (status) {
       case 'accepted':
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.green[50],
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.green[200]!),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.check_circle, size: 16, color: Colors.green[700]),
-              const SizedBox(width: 6),
-              Text(
-                'Arkadaşsınız',
-                style: TextStyle(
-                  color: Colors.green[700],
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-        );
-
-      case 'pending_sent':
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.orange[50],
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.orange[200]!),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.schedule, size: 16, color: Colors.orange[700]),
-              const SizedBox(width: 6),
-              Text(
-                'İstek Gönderildi',
-                style: TextStyle(
-                  color: Colors.orange[700],
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-        );
-
+        icon = Icons.chat_bubble_outline;
+        color = Colors.blue;
+        break;
       case 'pending_received':
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.blue[50],
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.blue[200]!),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.inbox, size: 16, color: Colors.blue[700]),
-              const SizedBox(width: 6),
-              Text(
-                'İstek Bekliyor',
-                style: TextStyle(
-                  color: Colors.blue[700],
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-        );
-
-      default: // 'none'
-        return SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: () => _sendFriendRequest(userId),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _primaryColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              elevation: 0,
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.person_add, size: 16),
-                SizedBox(width: 6),
-                Text(
-                  'Arkadaş Ekle',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-        );
+        icon = Icons.check;
+        color = Colors.green;
+        break;
+      case 'pending_sent':
+        icon = Icons.hourglass_empty;
+        color = Colors.grey;
+        disabled = true;
+        break;
+      case 'none':
+      default:
+        icon = Icons.add;
+        color = Colors.white; // Buton arka planı siyah/renkli ise ikon beyaz
+        break;
     }
+
+    // Eğer none/add ise, buton daha belirgin olsun diye farklı style
+    if (status == 'none') {
+      return SizedBox(
+        width: 40,
+        height: 40,
+        child: FloatingActionButton(
+          heroTag: 'action_${user.id}',
+          onPressed: () => _handleFriendAction(user, status),
+          backgroundColor: Colors.white,
+          mini: true,
+          elevation: 2,
+          child: Icon(Icons.add, color: Colors.black),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: FloatingActionButton(
+        heroTag: 'action_${user.id}',
+        onPressed: disabled ? null : () => _handleFriendAction(user, status),
+        backgroundColor: disabled
+            ? Colors.white.withOpacity(0.8)
+            : Colors.white,
+        mini: true,
+        elevation: 2,
+        child: Icon(icon, color: disabled ? Colors.grey : color),
+      ),
+    );
   }
 }

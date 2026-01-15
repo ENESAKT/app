@@ -432,8 +432,10 @@ class SupabaseService {
   }
 
   /// Profil bilgilerini güncelle
-  /// Desteklenen alanlar: username, bio, age, city, interests
+  /// Desteklenen alanlar: firstName, lastName, username, bio, age, city, interests
   Future<Map<String, dynamic>?> updateProfile({
+    String? firstName,
+    String? lastName,
     String? username,
     String? bio,
     int? age,
@@ -450,12 +452,18 @@ class SupabaseService {
 
       // Sadece null olmayan değerleri güncelle
       final Map<String, dynamic> updates = {};
+
+      if (firstName != null) updates['first_name'] = firstName;
+      if (lastName != null) updates['last_name'] = lastName;
       if (username != null) updates['username'] = username;
       if (bio != null) updates['bio'] = bio;
       if (age != null) updates['age'] = age;
       if (city != null) updates['city'] = city;
       if (interests != null) updates['interests'] = interests;
       if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
+
+      // Her güncellemede updated_at ekle
+      updates['updated_at'] = DateTime.now().toIso8601String();
 
       if (updates.isEmpty) {
         print('⚠️ Güncellenecek alan yok');
@@ -475,13 +483,6 @@ class SupabaseService {
       return response;
     } on PostgrestException catch (e) {
       print('❌ Profil güncelleme PostgreSQL hatası: ${e.message}');
-      // Sütun yoksa hata mesajı
-      if (e.message.contains('column') &&
-          e.message.contains('does not exist')) {
-        print(
-          '⚠️ Veritabanında bazı sütunlar eksik olabilir (age, city, interests)',
-        );
-      }
       return null;
     } catch (e) {
       print('❌ Profil güncelleme hatası: $e');
@@ -738,6 +739,22 @@ class SupabaseService {
     } catch (e) {
       print('❌ Arkadaşlık durumu kontrol hatası: $e');
       return null;
+    }
+  }
+
+  /// Mevcut kullanıcının tüm arkadaşlık bağlantılarını getir (Pending/Accepted)
+  /// Bu metod, Keşfet sayfasında her kart için tek tek sorgu atmamak için kullanılır.
+  Future<List<Map<String, dynamic>>> getMyFriendships(String userId) async {
+    try {
+      final response = await client
+          .from('friendships')
+          .select()
+          .or('user_id_1.eq.$userId,user_id_2.eq.$userId');
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Get my friendships error: $e');
+      return [];
     }
   }
 }
