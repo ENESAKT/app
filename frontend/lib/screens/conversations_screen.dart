@@ -4,9 +4,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../services/auth_provider.dart';
 import '../services/supabase_service.dart';
-import 'chat_screen.dart';
+import 'chat_detail_view.dart';
 
-/// Konuşmalar listesi ekranı
+/// Konuşmalar listesi ekranı - Sadece arkadaşları gösterir
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
 
@@ -16,9 +16,15 @@ class ConversationsScreen extends StatefulWidget {
 
 class _ConversationsScreenState extends State<ConversationsScreen> {
   final SupabaseService _supabaseService = SupabaseService();
-  List<Map<String, dynamic>> _conversations = [];
+
+  List<Map<String, dynamic>> _friends = []; // Kabul edilmiş arkadaşlar
+  List<Map<String, dynamic>> _conversations = []; // Son mesajlar
   bool _isLoading = true;
   String? _currentUserId;
+
+  // Tema renkleri
+  static const Color _primaryColor = Color(0xFF667eea);
+  static const Color _secondaryColor = Color(0xFF764ba2);
 
   @override
   void initState() {
@@ -30,47 +36,87 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     _currentUserId = auth.userId; // Supabase UUID
 
     if (_currentUserId != null) {
-      _loadConversations();
+      _loadData();
     }
   }
 
-  Future<void> _loadConversations() async {
+  Future<void> _loadData() async {
     setState(() => _isLoading = true);
 
     try {
+      // 1. Kabul edilmiş arkadaşları yükle
+      final friends = await _supabaseService.getAcceptedFriends(
+        _currentUserId!,
+      );
+
+      // 2. Son konuşmaları yükle
       final conversations = await _supabaseService.getConversations(
         _currentUserId!,
       );
+
       setState(() {
+        _friends = friends;
         _conversations = conversations;
         _isLoading = false;
       });
     } catch (e) {
+      print('❌ Load data error: $e');
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Konuşmalar yüklenemedi: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Veriler yüklenemedi: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
+    }
+  }
+
+  /// Arkadaşla son mesajı bul
+  Map<String, dynamic>? _getLastMessage(String friendId) {
+    try {
+      return _conversations.firstWhere((conv) {
+        final senderId = conv['sender_id'];
+        final receiverId = conv['receiver_id'];
+        return (senderId == friendId && receiverId == _currentUserId) ||
+            (senderId == _currentUserId && receiverId == friendId);
+      });
+    } catch (e) {
+      return null;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Sohbetler'),
-        backgroundColor: const Color(0xFF667eea),
+        title: const Text(
+          'Sohbetler',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: _primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person_add),
+            onPressed: () {
+              // TODO: Yeni sohbet başlat modalı
+            },
+            tooltip: 'Yeni Sohbet',
+          ),
+        ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _conversations.isEmpty
+          ? const Center(child: CircularProgressIndicator(color: _primaryColor))
+          : _friends.isEmpty
           ? _buildEmptyState()
           : RefreshIndicator(
-              onRefresh: _loadConversations,
-              child: _buildConversationsList(),
+              onRefresh: _loadData,
+              color: _primaryColor,
+              child: _buildFriendsList(),
             ),
     );
   }
@@ -80,92 +126,139 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.chat_bubble_outline, size: 80, color: Colors.grey[400]),
-          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: _primaryColor.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.chat_bubble_outline,
+              size: 60,
+              color: _primaryColor.withOpacity(0.5),
+            ),
+          ),
+          const SizedBox(height: 20),
           Text(
-            'Henüz sohbet yok',
-            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+            'Henüz arkadaşınız yok',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Arkadaşlarınızla mesajlaşmaya başlayın!',
+            'Keşfet sayfasından arkadaş ekleyin!',
             style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () {
+              // Ana sayfadaki Keşfet sekmesine git
+            },
+            icon: const Icon(Icons.explore),
+            label: const Text('Keşfete Git'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primaryColor,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildConversationsList() {
+  Widget _buildFriendsList() {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _conversations.length,
+      itemCount: _friends.length,
       itemBuilder: (context, index) {
-        final conversation = _conversations[index];
-        return _buildConversationTile(conversation);
+        final friend = _friends[index];
+        return _buildFriendTile(friend);
       },
     );
   }
 
-  Widget _buildConversationTile(Map<String, dynamic> conversation) {
-    final senderId = conversation['sender_id'];
-    final receiverId = conversation['receiver_id'];
-    final content = conversation['content'] ?? '';
-    final createdAt = DateTime.parse(conversation['created_at']);
-    final isRead = conversation['is_read'] ?? false;
+  Widget _buildFriendTile(Map<String, dynamic> friend) {
+    final friendId = friend['id'] ?? '';
+    final username = friend['username'] ?? 'Kullanıcı';
+    final avatarUrl = friend['avatar_url'];
 
-    // Karşı tarafın bilgilerini al
-    final otherUserId = senderId == _currentUserId ? receiverId : senderId;
-    final otherUserData = senderId == _currentUserId
-        ? conversation['receiver']
-        : conversation['sender'];
+    // Son mesajı bul
+    final lastMessage = _getLastMessage(friendId);
+    final hasMessage = lastMessage != null;
 
-    final otherUsername = otherUserData?['username'] ?? 'Kullanıcı';
-    final otherAvatar = otherUserData?['avatar_url'];
+    String previewText = 'Sohbete başla...';
+    DateTime? createdAt;
+    bool isRead = true;
+    bool isMine = false;
 
-    // Ben mi gönderdim?
-    final isMine = senderId == _currentUserId;
-
-    // Önizleme metni
-    final previewText = isMine ? 'Sen: $content' : content;
+    if (hasMessage) {
+      final content = lastMessage['content'] ?? '';
+      createdAt = DateTime.parse(lastMessage['created_at']);
+      isRead = lastMessage['is_read'] ?? true;
+      isMine = lastMessage['sender_id'] == _currentUserId;
+      previewText = isMine ? 'Sen: $content' : content;
+    }
 
     return InkWell(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ChatScreen(
-              friendId: otherUserId,
-              friendName: otherUsername,
-              friendAvatar: otherAvatar,
+            builder: (context) => ChatDetailView(
+              otherUserId: friendId,
+              otherUserName: username,
+              otherUserAvatar: avatarUrl,
             ),
           ),
-        ).then((_) => _loadConversations()); // Geri dönünce yenile
+        ).then((_) => _loadData()); // Geri dönünce yenile
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: !isRead && !isMine ? Colors.blue[50] : Colors.white,
-          border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+          color: !isRead && !isMine ? Colors.blue.shade50 : Colors.white,
+          border: Border(
+            bottom: BorderSide(color: Colors.grey.shade100, width: 1),
+          ),
         ),
         child: Row(
           children: [
-            // Avatar
-            CircleAvatar(
-              radius: 28,
-              backgroundImage: otherAvatar != null
-                  ? CachedNetworkImageProvider(otherAvatar)
-                  : null,
-              child: otherAvatar == null
-                  ? Text(
-                      otherUsername.isNotEmpty
-                          ? otherUsername[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(fontSize: 20),
-                    )
-                  : null,
+            // Avatar with gradient border
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [_primaryColor, _secondaryColor],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              padding: const EdgeInsets.all(2),
+              child: CircleAvatar(
+                radius: 28,
+                backgroundColor: Colors.white,
+                backgroundImage: avatarUrl != null
+                    ? CachedNetworkImageProvider(avatarUrl)
+                    : null,
+                child: avatarUrl == null
+                    ? Text(
+                        username.isNotEmpty ? username[0].toUpperCase() : '?',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: _primaryColor,
+                        ),
+                      )
+                    : null,
+              ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
 
             // Mesaj bilgileri
             Expanded(
@@ -176,21 +269,28 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        otherUsername,
+                        username,
                         style: TextStyle(
                           fontWeight: !isRead && !isMine
                               ? FontWeight.bold
                               : FontWeight.w600,
                           fontSize: 16,
+                          color: Colors.black87,
                         ),
                       ),
-                      Text(
-                        timeago.format(createdAt, locale: 'tr'),
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      ),
+                      if (createdAt != null)
+                        Text(
+                          timeago.format(createdAt, locale: 'tr'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: !isRead && !isMine
+                                ? _primaryColor
+                                : Colors.grey[500],
+                          ),
+                        ),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 5),
                   Row(
                     children: [
                       Expanded(
@@ -212,10 +312,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                       if (!isRead && !isMine) ...[
                         const SizedBox(width: 8),
                         Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF667eea),
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [_primaryColor, _secondaryColor],
+                            ),
                             shape: BoxShape.circle,
                           ),
                         ),
