@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../services/auth_provider.dart';
+import '../services/update_service.dart';
 
 /// Ayarlar ekranı - Profil ve uygulama ayarları
 class SettingsScreen extends StatefulWidget {
@@ -13,10 +13,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  // GitHub repository URL - DOĞRU URL'Yİ BURAYA YAZ
-  static const String GITHUB_REPO_URL = 'https://github.com/ENESAKT/app';
-  static const String GITHUB_RELEASES_URL = '$GITHUB_REPO_URL/releases/latest';
-
   // Dinamik versiyon bilgisi
   String _version = '...';
   String _buildNumber = '...';
@@ -266,43 +262,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _checkForUpdates(BuildContext context) async {
-    final Uri url = Uri.parse(GITHUB_RELEASES_URL);
+    print('🔍 Ayarlar ekranından güncelleme kontrolü başlatılıyor...');
 
-    print('🔗 Açılacak URL: $url');
-
-    try {
-      // Doğrudan launchUrl kullan (canLaunchUrl bazen false döner)
-      final launched = await launchUrl(
-        url,
-        mode: LaunchMode.externalApplication,
-      );
-
-      print('🚀 URL açıldı mı: $launched');
-
-      if (!launched && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Tarayıcı açılamadı. URL: $url'),
-            backgroundColor: Colors.orange,
-            action: SnackBarAction(
-              label: 'Kopyala',
-              textColor: Colors.white,
-              onPressed: () {
-                // URL'yi panoya kopyala
-                // Clipboard.setData(ClipboardData(text: url.toString()));
-              },
+    // Loading indicator göster
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
             ),
-          ),
-        );
-      }
-    } catch (e) {
-      print('❌ URL açma hatası: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
+            SizedBox(width: 12),
+            Text('Güncellemeler kontrol ediliyor...'),
+          ],
+        ),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    // UpdateService'i kullanarak güncelleme kontrolü yap (manual: true)
+    // Bu, güncelleme varsa dialog gösterecek, yoksa SnackBar gösterecek
+    await UpdateService().checkForUpdate(manual: true);
   }
 
   void _logout(BuildContext context, AuthProvider auth) async {

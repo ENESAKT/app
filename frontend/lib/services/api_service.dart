@@ -6,8 +6,8 @@ import '../models/models.dart';
 
 /// API Servisi - Django backend ile iletişim
 class ApiService {
-  static const String baseUrl = 'http://10.0.2.2:8000/api'; // Android emulator için
-  // static const String baseUrl = 'http://localhost:8000/api'; // iOS/Web için
+  // ✅ GÜNCELLENDİ: Artık canlı Render sunucusuna bağlanıyor
+  static const String baseUrl = 'https://arkadaslik-backend.onrender.com/api';
   
   String? _sessionId;
 

@@ -129,11 +129,20 @@ class UpdateService {
   /// CHECK FOR UPDATE - Supabase'den kontrol
   /// ════════════════════════════════════════════════════════════════════════
 
-  Future<AppUpdateInfo?> checkForUpdate() async {
+  /// Manuel kontrol için: checkForUpdate(manual: true)
+  /// Otomatik kontrol için: checkForUpdate() veya checkForUpdate(manual: false)
+  Future<AppUpdateInfo?> checkForUpdate({bool manual = false}) async {
     print('');
     print('═══════════════════════════════════════════════════════');
-    print('🔍 UPDATE KONTROLÜ');
+    print('🔍 UPDATE KONTROLÜ ${manual ? "(MANUEL)" : "(OTOMATİK)"}');
     print('═══════════════════════════════════════════════════════');
+
+    // Eğer _currentBuildNumber henüz set edilmemişse, şimdi al
+    if (_currentBuildNumber == null) {
+      final packageInfo = await PackageInfo.fromPlatform();
+      _currentBuildNumber = int.tryParse(packageInfo.buildNumber) ?? 1;
+      print('📱 Yerel Build Number alındı: $_currentBuildNumber');
+    }
 
     try {
       final response = await _supabase
@@ -145,27 +154,41 @@ class UpdateService {
 
       if (response == null) {
         print('❌ app_config tablosunda veri yok!');
+        if (manual) {
+          _showSnackBar('Güncelleme bilgisi alınamadı.', Colors.orange);
+        }
         return null;
       }
 
       print('📦 Supabase Response: $response');
 
       final updateInfo = AppUpdateInfo.fromJson(response);
+      final remoteBuildNumber = updateInfo.buildNumber;
+      final localBuildNumber = _currentBuildNumber!;
 
-      print('📊 Sunucu Build: ${updateInfo.buildNumber}');
-      print('📱 Yerel Build: $_currentBuildNumber');
+      print('📊 Sunucu Build: $remoteBuildNumber');
+      print('📱 Yerel Build: $localBuildNumber');
 
-      if (_currentBuildNumber != null &&
-          updateInfo.buildNumber > _currentBuildNumber!) {
-        print('✅ GÜNCELLEME MEVCUT!');
+      // SADECE remoteBuildNumber > localBuildNumber ise güncelleme göster
+      if (remoteBuildNumber > localBuildNumber) {
+        print('✅ GÜNCELLEME MEVCUT! ($remoteBuildNumber > $localBuildNumber)');
         _showUpdateDialog(updateInfo);
         return updateInfo;
       } else {
-        print('ℹ️ Uygulama güncel.');
+        // Eşit veya küçükse - güncelleme yok
+        print(
+          'ℹ️ Uygulama güncel. (Remote: $remoteBuildNumber, Local: $localBuildNumber)',
+        );
+        if (manual) {
+          _showSnackBar('✅ Uygulamanız güncel!', Colors.green);
+        }
         return null;
       }
     } catch (e) {
       print('❌ Hata: $e');
+      if (manual) {
+        _showSnackBar('Güncelleme kontrolü başarısız: $e', Colors.red);
+      }
       return null;
     }
   }

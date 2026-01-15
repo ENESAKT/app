@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'services/auth_provider.dart';
 import 'services/database_seeder.dart';
 import 'screens/login_screen.dart';
-import 'screens/home_screen.dart';
+import 'screens/main_scaffold.dart'; // MainScaffold import
 import 'screens/search_screen.dart';
 import 'screens/conversations_screen.dart';
 import 'screens/admin_panel_screen.dart';
@@ -103,7 +103,7 @@ class MyApp extends StatelessWidget {
         routes: {
           '/login': (context) => const LoginScreen(),
           '/register': (context) => const RegistrationScreen(),
-          '/home': (context) => const HomeScreen(),
+          '/home': (context) => const MainScaffold(), // MainScaffold kullan
           '/search': (context) => const SearchScreen(),
           '/friends': (context) => const FriendsScreen(),
           '/conversations': (context) => const ConversationsScreen(),
@@ -124,6 +124,9 @@ class MyApp extends StatelessWidget {
 }
 
 /// Auth Gate - Supabase onAuthStateChange ile oturum kontrolü
+///
+/// Oturum varsa MainScaffold'a yönlendirir (UpdateService otomatik init olur)
+/// Oturum yoksa LoginScreen'e yönlendirir
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
@@ -143,8 +146,8 @@ class AuthWrapper extends StatelessWidget {
         final session = snapshot.data?.session;
 
         if (session != null) {
-          // Oturum var -> Ana Sayfa
-          return const HomeScreen();
+          // Oturum var -> MainScaffold (UpdateService burada init oluyor)
+          return const MainScaffold();
         } else {
           // Oturum yok -> Giriş Ekranı
           return const LoginScreen();
