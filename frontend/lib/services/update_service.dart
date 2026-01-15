@@ -174,21 +174,37 @@ class UpdateService {
       print('📦 Supabase Response: $response');
 
       final updateInfo = AppUpdateInfo.fromJson(response);
-      final remoteVersion = updateInfo.currentVersion.trim();
-      final localVersion = _currentVersion!.trim();
+      final remoteVersionRaw = updateInfo.currentVersion;
+      final localVersionRaw = _currentVersion!;
+      final remoteVersion = remoteVersionRaw.trim();
+      final localVersion = localVersionRaw.trim();
 
-      print('📊 Sunucu Version: "$remoteVersion"');
-      print('📱 Yerel Version: "$localVersion"');
+      // ═══════════════════════════════════════════════════════════════════════
+      // DEBUG PRINTS - Detaylı hata ayıklama
+      // ═══════════════════════════════════════════════════════════════════════
+      print('');
+      print('🔍 DEBUG ════════════════════════════════════════════════');
+      print("🔍 DEBUG - Veritabanından Gelen Ham Veri: '$remoteVersionRaw'");
+      print("🔍 DEBUG - Trim Sonrası Remote: '$remoteVersion'");
+      print("🔍 DEBUG - Cihazdaki Yerel Versiyon (Ham): '$localVersionRaw'");
+      print("🔍 DEBUG - Trim Sonrası Local: '$localVersion'");
+      print(
+        '🔍 DEBUG - Remote uzunluk: ${remoteVersion.length}, Local uzunluk: ${localVersion.length}',
+      );
+      print('🔍 DEBUG - Eşit mi (==): ${remoteVersion == localVersion}');
+      print('🔍 DEBUG ════════════════════════════════════════════════');
+      print('');
 
       // Semantic version karşılaştırması
       final comparison = _compareVersions(remoteVersion, localVersion);
-      print(
-        '🔍 Karşılaştırma: $comparison (1=güncelleme var, 0=eşit, -1=yerel daha yeni)',
-      );
+
+      final bool needsUpdate = comparison > 0;
+      print("🔍 DEBUG - Sonuç: ${needsUpdate ? 'GÜNCELLEME VAR' : 'GÜNCEL'}");
+      print('');
 
       // SADECE remoteVersion > localVersion ise güncelleme göster
       // Eşit (comparison == 0) durumda ASLA güncelleme diyaloğu gösterme
-      if (comparison > 0) {
+      if (needsUpdate) {
         print('✅ GÜNCELLEME MEVCUT! ($remoteVersion > $localVersion)');
         _showUpdateDialog(updateInfo);
         return updateInfo;
@@ -214,21 +230,44 @@ class UpdateService {
   /// Semantic version karşılaştırması: "1.0.22" vs "1.0.21"
   /// Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
   int _compareVersions(String v1, String v2) {
+    print("🔍 DEBUG - Kıyaslanıyor: Remote('$v1') vs Local('$v2')");
+
     final parts1 = _parseVersion(v1);
     final parts2 = _parseVersion(v2);
 
+    print(
+      '🔍 DEBUG - Parse Sonucu Remote: Major=${parts1[0]}, Minor=${parts1[1]}, Patch=${parts1[2]}',
+    );
+    print(
+      '🔍 DEBUG - Parse Sonucu Local: Major=${parts2[0]}, Minor=${parts2[1]}, Patch=${parts2[2]}',
+    );
+
     // Major karşılaştır
     if (parts1[0] != parts2[0]) {
-      return parts1[0] > parts2[0] ? 1 : -1;
+      final result = parts1[0] > parts2[0] ? 1 : -1;
+      print(
+        '🔍 DEBUG - Major farklı! Remote(${parts1[0]}) vs Local(${parts2[0]}) => Sonuç: $result',
+      );
+      return result;
     }
     // Minor karşılaştır
     if (parts1[1] != parts2[1]) {
-      return parts1[1] > parts2[1] ? 1 : -1;
+      final result = parts1[1] > parts2[1] ? 1 : -1;
+      print(
+        '🔍 DEBUG - Minor farklı! Remote(${parts1[1]}) vs Local(${parts2[1]}) => Sonuç: $result',
+      );
+      return result;
     }
     // Patch karşılaştır
     if (parts1[2] != parts2[2]) {
-      return parts1[2] > parts2[2] ? 1 : -1;
+      final result = parts1[2] > parts2[2] ? 1 : -1;
+      print(
+        '🔍 DEBUG - Patch farklı! Remote(${parts1[2]}) vs Local(${parts2[2]}) => Sonuç: $result',
+      );
+      return result;
     }
+
+    print('🔍 DEBUG - Tüm parçalar eşit! Sonuç: 0 (GÜNCEL)');
     return 0; // Eşit
   }
 
@@ -236,11 +275,17 @@ class UpdateService {
   List<int> _parseVersion(String version) {
     final cleanVersion = version.split('+').first; // "1.0.22+1" -> "1.0.22"
     final parts = cleanVersion.split('.');
-    return [
+
+    final parsed = [
       parts.isNotEmpty ? int.tryParse(parts[0]) ?? 0 : 0,
       parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
       parts.length > 2 ? int.tryParse(parts[2]) ?? 0 : 0,
     ];
+
+    print(
+      "🔍 DEBUG - _parseVersion('$version') => clean='$cleanVersion' => $parsed",
+    );
+    return parsed;
   }
 
   /// ════════════════════════════════════════════════════════════════════════

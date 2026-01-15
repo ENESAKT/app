@@ -9,6 +9,27 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// FLUTTER VERSION - local.properties'den oku (pubspec.yaml'dan gelir)
+// ═══════════════════════════════════════════════════════════════════════════
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { stream ->
+        localProperties.load(stream)
+    }
+}
+
+val flutterVersionCode = localProperties.getProperty("flutter.versionCode")?.toIntOrNull() ?: 1
+val flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0.0"
+
+println("════════════════════════════════════════════════════════")
+println("📦 FLUTTER VERSION FROM local.properties")
+println("════════════════════════════════════════════════════════")
+println("   flutter.versionCode: $flutterVersionCode")
+println("   flutter.versionName: $flutterVersionName")
+println("════════════════════════════════════════════════════════")
+
 // 🔍 DEBUG TASK
 tasks.register("printSigningConfig") {
     doLast {
@@ -19,6 +40,11 @@ tasks.register("printSigningConfig") {
         println("📁 Directories:")
         println("   project.projectDir: ${project.projectDir.absolutePath}")
         println("   working dir: ${System.getProperty("user.dir")}")
+        println()
+        
+        println("📦 Version Info:")
+        println("   versionCode: $flutterVersionCode")
+        println("   versionName: $flutterVersionName")
         println()
         
         println("🔍 Keystore search:")
@@ -148,9 +174,16 @@ android {
         applicationId = "com.friendapp.frontend"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        
+        // ✅ Flutter'dan gelen dinamik versiyon değerleri
+        versionCode = flutterVersionCode
+        versionName = flutterVersionName
+        
         multiDexEnabled = true
+        
+        println("📱 DefaultConfig:")
+        println("   versionCode: $versionCode")
+        println("   versionName: $versionName")
     }
 
     buildTypes {
