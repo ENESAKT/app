@@ -89,6 +89,7 @@ class UpdateService {
   final Dio _dio = Dio();
 
   StreamSubscription? _realtimeSubscription;
+  String? _currentVersion; // Semantic version (e.g., "1.0.22")
   int? _currentBuildNumber;
   BuildContext? _context;
   bool _dialogShowing = false;
@@ -109,10 +110,11 @@ class UpdateService {
     _context = context;
 
     final packageInfo = await PackageInfo.fromPlatform();
+    _currentVersion = packageInfo.version; // e.g., "1.0.22"
     _currentBuildNumber = int.tryParse(packageInfo.buildNumber) ?? 1;
 
     print('📱 App: ${packageInfo.appName}');
-    print('📱 Version: ${packageInfo.version}');
+    print('📱 Version: $_currentVersion');
     print('📱 Build: $_currentBuildNumber');
 
     await checkForUpdate();
@@ -137,11 +139,12 @@ class UpdateService {
     print('🔍 UPDATE KONTROLÜ ${manual ? "(MANUEL)" : "(OTOMATİK)"}');
     print('═══════════════════════════════════════════════════════');
 
-    // Eğer _currentBuildNumber henüz set edilmemişse, şimdi al
-    if (_currentBuildNumber == null) {
+    // Eğer _currentVersion henüz set edilmemişse, şimdi al
+    if (_currentVersion == null) {
       final packageInfo = await PackageInfo.fromPlatform();
+      _currentVersion = packageInfo.version;
       _currentBuildNumber = int.tryParse(packageInfo.buildNumber) ?? 1;
-      print('📱 Yerel Build Number alındı: $_currentBuildNumber');
+      print('📱 Yerel Version alındı: $_currentVersion');
     }
 
     try {
@@ -163,21 +166,27 @@ class UpdateService {
       print('📦 Supabase Response: $response');
 
       final updateInfo = AppUpdateInfo.fromJson(response);
-      final remoteBuildNumber = updateInfo.buildNumber;
-      final localBuildNumber = _currentBuildNumber!;
+      final remoteVersion = updateInfo.currentVersion;
+      final localVersion = _currentVersion!;
 
-      print('📊 Sunucu Build: $remoteBuildNumber');
-      print('📱 Yerel Build: $localBuildNumber');
+      print('📊 Sunucu Version: $remoteVersion');
+      print('📱 Yerel Version: $localVersion');
 
-      // SADECE remoteBuildNumber > localBuildNumber ise güncelleme göster
-      if (remoteBuildNumber > localBuildNumber) {
-        print('✅ GÜNCELLEME MEVCUT! ($remoteBuildNumber > $localBuildNumber)');
+      // Semantic version karşılaştırması
+      final comparison = _compareVersions(remoteVersion, localVersion);
+      print(
+        '🔍 Karşılaştırma: $comparison (1=güncelleme var, 0=eşit, -1=yerel daha yeni)',
+      );
+
+      // SADECE remoteVersion > localVersion ise güncelleme göster
+      if (comparison > 0) {
+        print('✅ GÜNCELLEME MEVCUT! ($remoteVersion > $localVersion)');
         _showUpdateDialog(updateInfo);
         return updateInfo;
       } else {
         // Eşit veya küçükse - güncelleme yok
         print(
-          'ℹ️ Uygulama güncel. (Remote: $remoteBuildNumber, Local: $localBuildNumber)',
+          'ℹ️ Uygulama güncel. (Remote: $remoteVersion, Local: $localVersion)',
         );
         if (manual) {
           _showSnackBar('✅ Uygulamanız güncel!', Colors.green);
@@ -193,6 +202,38 @@ class UpdateService {
     }
   }
 
+  /// Semantic version karşılaştırması: "1.0.22" vs "1.0.21"
+  /// Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
+  int _compareVersions(String v1, String v2) {
+    final parts1 = _parseVersion(v1);
+    final parts2 = _parseVersion(v2);
+
+    // Major karşılaştır
+    if (parts1[0] != parts2[0]) {
+      return parts1[0] > parts2[0] ? 1 : -1;
+    }
+    // Minor karşılaştır
+    if (parts1[1] != parts2[1]) {
+      return parts1[1] > parts2[1] ? 1 : -1;
+    }
+    // Patch karşılaştır
+    if (parts1[2] != parts2[2]) {
+      return parts1[2] > parts2[2] ? 1 : -1;
+    }
+    return 0; // Eşit
+  }
+
+  /// Version string'i parse et: "1.0.22" -> [1, 0, 22]
+  List<int> _parseVersion(String version) {
+    final cleanVersion = version.split('+').first; // "1.0.22+1" -> "1.0.22"
+    final parts = cleanVersion.split('.');
+    return [
+      parts.isNotEmpty ? int.tryParse(parts[0]) ?? 0 : 0,
+      parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
+      parts.length > 2 ? int.tryParse(parts[2]) ?? 0 : 0,
+    ];
+  }
+
   /// ════════════════════════════════════════════════════════════════════════
   /// REALTIME LISTENER
   /// ════════════════════════════════════════════════════════════════════════
@@ -202,10 +243,18 @@ class UpdateService {
         .from('app_config')
         .stream(primaryKey: ['id'])
         .listen((data) {
-          if (data.isNotEmpty) {
+          if (data.isNotEmpty && _currentVersion != null) {
             final updateInfo = AppUpdateInfo.fromJson(data.first);
-            if (_currentBuildNumber != null &&
-                updateInfo.buildNumber > _currentBuildNumber!) {
+            final remoteVersion = updateInfo.currentVersion;
+            final comparison = _compareVersions(
+              remoteVersion,
+              _currentVersion!,
+            );
+
+            if (comparison > 0 && !_dialogShowing) {
+              print(
+                '🔔 Realtime: Yeni güncelleme tespit edildi! $remoteVersion > $_currentVersion',
+              );
               _showUpdateDialog(updateInfo);
             }
           }
