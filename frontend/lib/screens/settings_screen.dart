@@ -25,15 +25,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadVersionInfo() async {
     try {
+      print('📱 Versiyon bilgisi yükleniyor...');
       final packageInfo = await PackageInfo.fromPlatform();
+      print(
+        '📱 PackageInfo alındı: ${packageInfo.version} (${packageInfo.buildNumber})',
+      );
+
       if (mounted) {
         setState(() {
           _version = packageInfo.version;
           _buildNumber = packageInfo.buildNumber;
         });
+        print('✅ Versiyon güncellendi: v$_version (Build $_buildNumber)');
       }
     } catch (e) {
-      print('Versiyon bilgisi alınamadı: $e');
+      print('❌ Versiyon bilgisi alınamadı: $e');
+      if (mounted) {
+        setState(() {
+          _version = 'Hata';
+          _buildNumber = '-';
+        });
+      }
     }
   }
 
@@ -287,7 +299,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     // UpdateService'i kullanarak güncelleme kontrolü yap (manual: true)
     // Bu, güncelleme varsa dialog gösterecek, yoksa SnackBar gösterecek
-    await UpdateService().checkForUpdate(manual: true);
+    await UpdateService().checkForUpdate(context: context, manual: true);
   }
 
   void _logout(BuildContext context, AuthProvider auth) async {

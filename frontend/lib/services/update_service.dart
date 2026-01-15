@@ -110,7 +110,7 @@ class UpdateService {
     _context = context;
 
     final packageInfo = await PackageInfo.fromPlatform();
-    _currentVersion = packageInfo.version; // e.g., "1.0.22"
+    _currentVersion = packageInfo.version.trim(); // e.g., "1.0.22"
     _currentBuildNumber = int.tryParse(packageInfo.buildNumber) ?? 1;
 
     print('📱 App: ${packageInfo.appName}');
@@ -131,18 +131,26 @@ class UpdateService {
   /// CHECK FOR UPDATE - Supabase'den kontrol
   /// ════════════════════════════════════════════════════════════════════════
 
-  /// Manuel kontrol için: checkForUpdate(manual: true)
+  /// Manuel kontrol için: checkForUpdate(context: ctx, manual: true)
   /// Otomatik kontrol için: checkForUpdate() veya checkForUpdate(manual: false)
-  Future<AppUpdateInfo?> checkForUpdate({bool manual = false}) async {
+  Future<AppUpdateInfo?> checkForUpdate({
+    BuildContext? context,
+    bool manual = false,
+  }) async {
     print('');
     print('═══════════════════════════════════════════════════════');
     print('🔍 UPDATE KONTROLÜ ${manual ? "(MANUEL)" : "(OTOMATİK)"}');
     print('═══════════════════════════════════════════════════════');
 
+    // Manuel çağrılarda context güncelle
+    if (context != null) {
+      _context = context;
+    }
+
     // Eğer _currentVersion henüz set edilmemişse, şimdi al
     if (_currentVersion == null) {
       final packageInfo = await PackageInfo.fromPlatform();
-      _currentVersion = packageInfo.version;
+      _currentVersion = packageInfo.version.trim();
       _currentBuildNumber = int.tryParse(packageInfo.buildNumber) ?? 1;
       print('📱 Yerel Version alındı: $_currentVersion');
     }
@@ -166,11 +174,11 @@ class UpdateService {
       print('📦 Supabase Response: $response');
 
       final updateInfo = AppUpdateInfo.fromJson(response);
-      final remoteVersion = updateInfo.currentVersion;
-      final localVersion = _currentVersion!;
+      final remoteVersion = updateInfo.currentVersion.trim();
+      final localVersion = _currentVersion!.trim();
 
-      print('📊 Sunucu Version: $remoteVersion');
-      print('📱 Yerel Version: $localVersion');
+      print('📊 Sunucu Version: "$remoteVersion"');
+      print('📱 Yerel Version: "$localVersion"');
 
       // Semantic version karşılaştırması
       final comparison = _compareVersions(remoteVersion, localVersion);
@@ -179,14 +187,15 @@ class UpdateService {
       );
 
       // SADECE remoteVersion > localVersion ise güncelleme göster
+      // Eşit (comparison == 0) durumda ASLA güncelleme diyaloğu gösterme
       if (comparison > 0) {
         print('✅ GÜNCELLEME MEVCUT! ($remoteVersion > $localVersion)');
         _showUpdateDialog(updateInfo);
         return updateInfo;
       } else {
-        // Eşit veya küçükse - güncelleme yok
+        // comparison <= 0: Eşit veya yerel daha yeni - güncelleme yok
         print(
-          'ℹ️ Uygulama güncel. (Remote: $remoteVersion, Local: $localVersion)',
+          'ℹ️ Uygulama güncel. (Remote: $remoteVersion, Local: $localVersion, Comparison: $comparison)',
         );
         if (manual) {
           _showSnackBar('✅ Uygulamanız güncel!', Colors.green);
@@ -245,15 +254,14 @@ class UpdateService {
         .listen((data) {
           if (data.isNotEmpty && _currentVersion != null) {
             final updateInfo = AppUpdateInfo.fromJson(data.first);
-            final remoteVersion = updateInfo.currentVersion;
-            final comparison = _compareVersions(
-              remoteVersion,
-              _currentVersion!,
-            );
+            final remoteVersion = updateInfo.currentVersion.trim();
+            final localVersion = _currentVersion!.trim();
+            final comparison = _compareVersions(remoteVersion, localVersion);
 
+            // SADECE remoteVersion > localVersion ise güncelleme göster
             if (comparison > 0 && !_dialogShowing) {
               print(
-                '🔔 Realtime: Yeni güncelleme tespit edildi! $remoteVersion > $_currentVersion',
+                '🔔 Realtime: Yeni güncelleme tespit edildi! $remoteVersion > $localVersion',
               );
               _showUpdateDialog(updateInfo);
             }
