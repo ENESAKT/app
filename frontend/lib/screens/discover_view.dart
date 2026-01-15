@@ -106,9 +106,13 @@ class _DiscoverViewState extends State<DiscoverView> {
       }
 
       if (mounted) {
+        // Kendi profilimi listeden filtrele
+        final filteredList = users
+            .where((u) => u.id != _currentUserId)
+            .toList();
         setState(() {
-          _allUsers = users;
-          _filteredUsers = users;
+          _allUsers = filteredList;
+          _filteredUsers = filteredList;
           _isLoading = false;
         });
       }
@@ -267,7 +271,30 @@ class _DiscoverViewState extends State<DiscoverView> {
           const SizedBox(height: 16),
           Text(
             'Kullanıcı bulunamadı',
-            style: TextStyle(color: Colors.grey[500], fontSize: 16),
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Veritabanını kontrol edin.',
+            style: TextStyle(color: Colors.grey[400], fontSize: 14),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _fetchData,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Yenile'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueAccent,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
           ),
         ],
       ),
@@ -303,18 +330,33 @@ class _DiscoverViewState extends State<DiscoverView> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // 1. Profil Resmi (Cover)
+            // 1. Profil Resmi (Cover) - Null safety ile
             if (user.avatarUrl != null && user.avatarUrl!.isNotEmpty)
               Image.network(
                 user.avatarUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    Container(color: Colors.grey[300]),
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    color: Colors.blueGrey[100],
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: Colors.blueGrey[100],
+                  child: const Center(
+                    child: Icon(Icons.person, size: 50, color: Colors.white),
+                  ),
+                ),
               )
             else
               Container(
                 color: Colors.blueGrey[100],
-                child: const Icon(Icons.person, size: 50, color: Colors.white),
+                child: const Center(
+                  child: Icon(Icons.person, size: 50, color: Colors.white),
+                ),
               ),
 
             // 2. Siyah Gradient (Altta)

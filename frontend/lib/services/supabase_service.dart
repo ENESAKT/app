@@ -490,6 +490,69 @@ class SupabaseService {
     }
   }
 
+  /// Profil bilgilerini upsert et (yoksa ekle, varsa güncelle)
+  /// Yeni kayıt olan kullanıcılar için profil oluşturma
+  Future<Map<String, dynamic>?> upsertProfile({
+    String? firstName,
+    String? lastName,
+    String? username,
+    String? bio,
+    int? age,
+    String? city,
+    List<String>? interests,
+    String? avatarUrl,
+  }) async {
+    try {
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) {
+        print('❌ Kullanıcı oturumu bulunamadı');
+        return null;
+      }
+
+      final email = client.auth.currentUser?.email ?? '';
+
+      // Upsert için veri hazırla
+      final Map<String, dynamic> profileData = {
+        'id': userId,
+        'email': email,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      // Sadece null olmayan değerleri ekle
+      if (firstName != null) profileData['first_name'] = firstName;
+      if (lastName != null) profileData['last_name'] = lastName;
+      if (username != null) profileData['username'] = username;
+      if (bio != null) profileData['bio'] = bio;
+      if (age != null) profileData['age'] = age;
+      if (city != null) profileData['city'] = city;
+      if (interests != null) profileData['interests'] = interests;
+      if (avatarUrl != null) profileData['avatar_url'] = avatarUrl;
+
+      // Username yoksa email'den oluştur
+      if (!profileData.containsKey('username') ||
+          profileData['username'] == null) {
+        profileData['username'] = email.split('@').first;
+      }
+
+      print('🔄 Profil upsert ediliyor: $profileData');
+
+      final response = await client
+          .from('users')
+          .upsert(profileData, onConflict: 'id')
+          .select()
+          .single();
+
+      print('✅ Profil upsert başarılı');
+      return response;
+    } on PostgrestException catch (e) {
+      print('❌ Profil upsert PostgreSQL hatası: ${e.message}');
+      return null;
+    } catch (e) {
+      print('❌ Profil upsert hatası: $e');
+      return null;
+    }
+  }
+
   /// Profil fotoğrafını Supabase Storage'a yükle
   /// Dönen değer: Public URL
   Future<String?> uploadProfilePhoto(String filePath) async {

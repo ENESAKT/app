@@ -34,6 +34,7 @@ class _ChatDetailViewState extends State<ChatDetailView> {
   List<Map<String, dynamic>> _messages = [];
   StreamSubscription? _messagesSubscription;
   bool _isLoading = true;
+  String? _errorMessage; // Hata mesajı için
   String? _currentUserId;
 
   // Tema renkleri
@@ -61,26 +62,39 @@ class _ChatDetailViewState extends State<ChatDetailView> {
   Future<void> _initializeChat() async {
     if (_currentUserId == null) return;
 
-    setState(() => _isLoading = true);
-
-    // İlk mesajları yükle
-    final messages = await _supabaseService.getMessageHistory(
-      _currentUserId!,
-      widget.otherUserId,
-    );
-
     setState(() {
-      _messages = messages;
-      _isLoading = false;
+      _isLoading = true;
+      _errorMessage = null; // Önceki hatayı temizle
     });
 
-    _scrollToBottom();
+    try {
+      // İlk mesajları yükle
+      final messages = await _supabaseService.getMessageHistory(
+        _currentUserId!,
+        widget.otherUserId,
+      );
 
-    // Realtime stream'i başlat
-    _startRealtimeListener();
+      setState(() {
+        _messages = messages;
+        _isLoading = false;
+      });
 
-    // Mesajları okundu olarak işaretle
-    _markMessagesAsRead();
+      _scrollToBottom();
+
+      // Realtime stream'i başlat
+      _startRealtimeListener();
+
+      // Mesajları okundu olarak işaretle
+      _markMessagesAsRead();
+    } catch (e) {
+      print('❌ Chat yükleme hatası: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Bağlantı hatası: $e';
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _startRealtimeListener() {
@@ -155,6 +169,8 @@ class _ChatDetailViewState extends State<ChatDetailView> {
                 ? const Center(
                     child: CircularProgressIndicator(color: _primaryColor),
                   )
+                : _errorMessage != null
+                ? _buildErrorState()
                 : _messages.isEmpty
                 ? _buildEmptyState()
                 : _buildMessageList(),
@@ -353,6 +369,63 @@ class _ChatDetailViewState extends State<ChatDetailView> {
                   ),
                 ],
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.error_outline,
+                size: 60,
+                color: Colors.red.withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Bağlantı Hatası',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _errorMessage ?? 'Bilinmeyen hata',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: Colors.red[400]),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _initializeChat,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Tekrar Dene'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
             ),
           ],
         ),

@@ -34,6 +34,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   UserModel? _user;
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isNewProfile = false; // Yeni kullanıcı profili oluşturma modu
 
   // Tema Renkleri
   static const Color _primaryStart = Color(0xFF667eea);
@@ -65,6 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final user = UserModel.fromJson(data);
         setState(() {
           _user = user;
+          _isNewProfile = false;
           // Formu doldur
           _firstNameController.text = user.firstName ?? '';
           _lastNameController.text = user.lastName ?? '';
@@ -73,9 +75,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _bioController.text = user.bio ?? '';
           _interestsController.text = user.interests?.join(', ') ?? '';
         });
+      } else {
+        // Veri yoksa yeni profil oluşturma moduna geç
+        setState(() {
+          _isNewProfile = true;
+          _user = null;
+        });
+        print('ℹ️ Kullanıcı profili bulunamadı, yeni profil oluşturma modu');
       }
     } catch (e) {
       print('❌ Profil yükleme hatası: $e');
+      // Hata durumunda da yeni profil modu
+      setState(() {
+        _isNewProfile = true;
+        _user = null;
+      });
     } finally {
       setState(() => _isLoading = false);
     }
@@ -143,7 +157,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final age = int.tryParse(_ageController.text.trim());
 
-      await _supabaseService.updateProfile(
+      // upsertProfile kullan - yoksa ekle, varsa güncelle
+      await _supabaseService.upsertProfile(
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         age: age,
@@ -185,10 +200,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // Eğer başkasının profili ise UserProfileView kullanılır.
     // Bu ekranı "Profil Düzenle" veya "Profilim" olarak kurguluyorum.
 
+    // Dinamik başlık: Yeni profil ise "Profil Oluştur", mevcut ise "Profili Düzenle"
+    final String appBarTitle = _isNewProfile
+        ? 'Profil Oluştur'
+        : 'Profili Düzenle';
+
     return Scaffold(
       backgroundColor: Colors.grey[50], // Hafif gri arka plan
       appBar: AppBar(
-        title: const Text('Profilim'),
+        title: Text(appBarTitle),
         backgroundColor: Colors.transparent,
         elevation: 0,
         flexibleSpace: Container(
