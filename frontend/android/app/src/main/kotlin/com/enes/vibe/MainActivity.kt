@@ -1,4 +1,4 @@
-package com.yourcompany.vibe
+package com.enes.vibe
 
 import io.flutter.embedding.android.FlutterActivity
 
