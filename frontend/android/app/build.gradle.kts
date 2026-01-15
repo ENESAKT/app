@@ -1,56 +1,89 @@
-// ═══════════════════════════════════════════════════════════════════════════
-// ROOT BUILD.GRADLE.KTS (Project Level)
-// ═══════════════════════════════════════════════════════════════════════════
-
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        // Senin projenin uyumlu olduğu versiyonlar
-        classpath("com.android.tools.build:gradle:8.2.1")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.0")
-    }
+plugins {
+    id("com.android.application")
+    id("kotlin-android")
+    // Flutter Plugin'i
+    id("dev.flutter.flutter-gradle-plugin")
+    // 👇 FIREBASE İÇİN GEREKLİ OLAN KISIM BURASI
+    id("com.google.gms.google-services")
 }
 
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
     }
 }
 
-val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
-rootProject.layout.buildDirectory.value(newBuildDir)
-
-subprojects {
-    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
-    project.layout.buildDirectory.value(newSubprojectBuildDir)
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '1'
 }
 
-subprojects {
-    project.evaluationDependsOn(":app")
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '1.0'
 }
 
-tasks.register<Delete>("clean") {
-    delete(rootProject.layout.buildDirectory)
-}
+android {
+    namespace = "com.enes.vibe"
+    compileSdk = 34
+    ndkVersion = "27.0.12077973"
 
-// ═══════════════════════════════════════════════════════════════════════════
-// NAMESPACE HATASI DÜZELTİCİ (Sadeleştirilmiş Versiyon)
-// Bu kod, eski paketlerin (r_upgrade vb.) build hatası vermesini engeller.
-// ═══════════════════════════════════════════════════════════════════════════
-subprojects {
-    afterEvaluate {
-        if (project.plugins.hasPlugin("com.android.library")) {
-            val android = project.extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)
-            
-            if (android != null && android.namespace == null) {
-                // Hata veren paketlere otomatik isim ata
-                val safeName = project.name.replace("-", "_").replace(".", "_")
-                android.namespace = "com.example.fixed.$safeName"
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        applicationId = "com.enes.vibe"
+        
+        // 🔥 TABLET HATASINI ÇÖZEN AYAR (21 yaptık)
+        minSdk = 21
+        
+        targetSdk = 34
+        versionCode = flutterVersionCode.toInteger()
+        versionName = flutterVersionName
+    }
+
+    // İMZALAMA AYARLARI (GitHub Actions ve Release için)
+    signingConfigs {
+        release {
+            // Eğer GitHub Secret'larında tanımlıysa oradan alır, yoksa hata vermez
+            def keystoreFile = file("upload-keystore.jks")
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
             }
         }
     }
+
+    buildTypes {
+        release {
+            // İmza ayarlarını uygula (dosya varsa)
+            signingConfig = signingConfigs.release
+            
+            // Kod sıkıştırma (APK boyutunu küçültür)
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+}
+
+flutter {
+    source = "../.."
 }
