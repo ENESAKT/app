@@ -7,6 +7,35 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:721048601246:android:57ec84b8ea8b58bbf6318f",
+        "android_client_info": {
+          "package_name": "com.enes.vibe"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "721048601246-a7ffflvgvq2aqeeliufgn1qhsje5ago0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDSnUxtmia1w_AAC5q0d6nNR2smVcL9c8k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "721048601246-a7ffflvgvq2aqeeliufgn1qhsje5ago0.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:721048601246:android:a8eb81b1ede10bb1f6318f",
         "android_client_info": {
           "package_name": "com.friendapp.frontend"
@@ -14,11 +43,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "721048601246-kslchfa71p3h7s387pj9q2iou39gi93t.apps.googleusercontent.com",
+          "client_id": "721048601246-8vsrd011jll83802eskg0tjhgh1eq70q.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.friendapp.frontend",
-            "certificate_hash": "06f928bb781e8c3fdd9b7e42619b5c55399de30c"
+            "certificate_hash": "ac4b386120707b395b29cdf78f760023631d1273"
           }
         },
         {
