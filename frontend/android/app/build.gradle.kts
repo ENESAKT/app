@@ -1,64 +1,56 @@
-import java.util.Properties
-import java.io.FileInputStream
-import java.io.File
-
-plugins {
-    id("com.android.application")
-    id("kotlin-android")
-    id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services")
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
-// FLUTTER VERSION - local.properties'den oku (pubspec.yaml'dan gelir)
+// ROOT BUILD.GRADLE.KTS (Project Level)
 // ═══════════════════════════════════════════════════════════════════════════
-val localProperties = Properties()
-val localPropertiesFile = rootProject.file("local.properties")
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.inputStream().use { stream ->
-        localProperties.load(stream)
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // Senin projenin uyumlu olduğu versiyonlar
+        classpath("com.android.tools.build:gradle:8.2.1")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.0")
     }
 }
 
-val flutterVersionCode = localProperties.getProperty("flutter.versionCode")?.toIntOrNull() ?: 1
-val flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0.0"
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
 
-println("════════════════════════════════════════════════════════")
-println("📦 FLUTTER VERSION FROM local.properties")
-println("════════════════════════════════════════════════════════")
-println("   flutter.versionCode: $flutterVersionCode")
-println("   flutter.versionName: $flutterVersionName")
-println("════════════════════════════════════════════════════════")
+val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
+rootProject.layout.buildDirectory.value(newBuildDir)
 
-// 🔍 DEBUG TASK (Build sırasında imza yapılandırmasını kontrol eder)
-tasks.register("printSigningConfig") {
-    doLast {
-        println("════════════════════════════════════════════════════════")
-        println("🔍 SIGNING CONFIGURATION DIAGNOSTICS")
-        println("════════════════════════════════════════════════════════")
-        
-        println("📁 Directories:")
-        println("   project.projectDir: ${project.projectDir.absolutePath}")
-        println("   working dir: ${System.getProperty("user.dir")}")
-        println()
-        
-        println("📦 Version Info:")
-        println("   versionCode: $flutterVersionCode")
-        println("   versionName: $flutterVersionName")
-        println()
-        
-        println("🔍 Keystore search:")
-        val keystoreFile = File(project.projectDir, "upload-keystore.jks")
-        println("   Path: ${keystoreFile.absolutePath}")
-        println("   Exists: ${keystoreFile.exists()}")
-        if (keystoreFile.exists()) {
-            println("   Size: ${keystoreFile.length()} bytes")
+subprojects {
+    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
+    project.layout.buildDirectory.value(newSubprojectBuildDir)
+}
+
+subprojects {
+    project.evaluationDependsOn(":app")
+}
+
+tasks.register<Delete>("clean") {
+    delete(rootProject.layout.buildDirectory)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NAMESPACE HATASI DÜZELTİCİ (Sadeleştirilmiş Versiyon)
+// Bu kod, eski paketlerin (r_upgrade vb.) build hatası vermesini engeller.
+// ═══════════════════════════════════════════════════════════════════════════
+subprojects {
+    afterEvaluate {
+        if (project.plugins.hasPlugin("com.android.library")) {
+            val android = project.extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)
+            
+            if (android != null && android.namespace == null) {
+                // Hata veren paketlere otomatik isim ata
+                val safeName = project.name.replace("-", "_").replace(".", "_")
+                android.namespace = "com.example.fixed.$safeName"
+            }
         }
-        println()
-        
-        println("🔐 Environment Variables:")
-        val pass = System.getenv("KEYSTORE_PASSWORD")
-        val alias = System.getenv("KEY_ALIAS")
-        val keyPass = System.getenv("KEY_PASSWORD")
-        println("   KEYSTORE_PASSWORD: ${if (pass != null) "✅ SET (${pass.length} chars)" else "❌ NULL"}")
-        println("   KEY_ALIAS
+    }
+}
