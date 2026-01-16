@@ -1,87 +1,86 @@
+// android/app/build.gradle.kts (Kotlin DSL)
+
 plugins {
-    id "com.android.application"
-    id "dev.flutter.flutter-gradle-plugin"
-    // 🔥 Firebase Plugin'i (Groovy Stili)
-    id "com.google.gms.google-services"
+    id("com.android.application")
+    id("kotlin-android")
+    id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.gms.google-services")
 }
 
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file('local.properties')
+// Local Properties (Kotlin DSL)
+val localProperties = java.util.Properties()
+val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
-    localPropertiesFile.withReader('UTF-8') { reader ->
-        localProperties.load(reader)
+    localPropertiesFile.inputStream().use { stream ->
+        localProperties.load(stream)
     }
 }
 
-def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-if (flutterVersionCode == null) {
-    flutterVersionCode = '1'
-}
-
-def flutterVersionName = localProperties.getProperty('flutter.versionName')
-if (flutterVersionName == null) {
-    flutterVersionName = '1.0'
-}
+val flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "1"
+val flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0"
 
 android {
-    namespace "com.enes.vibe"
-    compileSdk 34
-    ndkVersion "27.0.12077973"
+    namespace = "com.enes.vibe"
+    compileSdk = 34
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
 
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = "1.8"
     }
 
     sourceSets {
-        main.java.srcDirs += 'src/main/kotlin'
+        getByName("main") {
+            java.srcDirs("src/main/kotlin")
+        }
     }
 
     defaultConfig {
-        applicationId "com.enes.vibe"
+        applicationId = "com.enes.vibe"
         
         // 🔥 TABLET İÇİN KRİTİK AYAR
-        minSdkVersion 21 
+        minSdk = 21
         
-        targetSdkVersion 34
-        versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
+        targetSdk = 34
+        versionCode = flutterVersionCode.toInt()
+        versionName = flutterVersionName
     }
 
     // ⚠️ RELEASE HATALARINI ENGELLEYEN LINT AYARI
-    lintOptions {
-        checkReleaseBuilds false
-        abortOnError false
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
     signingConfigs {
-        release {
+        create("release") {
             // Hata almamak için şimdilik debug anahtarını kullanıyoruz
-            // GitHub Actions kısmında storeFile'ı dinamik hale getirmek gerekebilir
-            // Ama şimdilik build alması için bu yeterli.
-             keyAlias 'androiddebugkey'
-             keyPassword 'android'
-             storeFile file("debug.keystore") // Bu dosya yoksa hata verebilir, aşağıyı oku
-             storePassword 'android'
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+            storeFile = file("debug.keystore")
+            storePassword = "android"
         }
     }
 
     buildTypes {
-        release {
+        getByName("release") {
             // İmza işini şimdilik basitleştirelim, hata vermesin
-            signingConfig signingConfigs.debug 
+            signingConfig = signingConfigs.getByName("debug")
             
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
 
 flutter {
-    source '../..'
+    source = "../.."
 }
