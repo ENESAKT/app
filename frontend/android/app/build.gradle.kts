@@ -1,5 +1,8 @@
 // android/app/build.gradle.kts (Kotlin DSL)
 
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -8,10 +11,10 @@ plugins {
 }
 
 // Local Properties (Kotlin DSL)
-val localProperties = java.util.Properties()
+val localProperties = Properties()
 val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
-    localPropertiesFile.inputStream().use { stream ->
+    FileInputStream(localPropertiesFile).use { stream ->
         localProperties.load(stream)
     }
 }
