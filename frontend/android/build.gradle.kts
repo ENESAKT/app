@@ -28,24 +28,18 @@ subprojects {
     layout.buildDirectory.set(file("${rootProject.layout.buildDirectory.get().asFile}/${project.name}"))
 }
 
-subprojects {
-    project.evaluationDependsOn(":app")
-}
-
 // Clean task (Kotlin DSL)
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
 
-// Namespace Fixer - Eski paketlerin namespace hatasını önler
+// Namespace Fixer (Gradle Lifecycle Safe Version)
 subprojects {
-    afterEvaluate {
-        if (project.plugins.hasPlugin("com.android.library")) {
-            val android = project.extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)
-            if (android != null && android.namespace == null) {
-                val safeName = project.name.replace("-", "_").replace(".", "_")
-                android.namespace = "com.example.fixed.$safeName"
-            }
+    plugins.withId("com.android.library") {
+        val extension = extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)
+        if (extension != null && extension.namespace == null) {
+            val safeName = project.name.replace("-", "_").replace(".", "_")
+            extension.namespace = "com.example.fixed.$safeName"
         }
     }
 }
