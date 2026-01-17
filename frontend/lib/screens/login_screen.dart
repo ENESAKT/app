@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_provider.dart';
 
 /// Login Ekranı - Premium Dark Theme + Glassmorphism
@@ -70,6 +71,125 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     if (success && mounted) {
       Navigator.pushReplacementNamed(context, '/home');
     }
+  }
+
+  /// Şifremi Unuttum Dialog
+  Future<void> _showForgotPasswordDialog() async {
+    final emailController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Şifremi Unuttum',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'E-posta adresinizi girin. Şifre sıfırlama bağlantısı göndereceğiz.',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: emailController,
+              keyboardType: TextInputType.emailAddress,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'E-posta',
+                labelStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                ),
+                prefixIcon: Icon(
+                  Icons.email_outlined,
+                  color: Colors.white.withValues(alpha: 0.5),
+                ),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.1),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'İptal',
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B5CF6),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Gönder', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && emailController.text.isNotEmpty && mounted) {
+      try {
+        await Supabase.instance.client.auth.resetPasswordForEmail(
+          emailController.text.trim(),
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text('Şifre sıfırlama bağlantısı gönderildi!'),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green.shade600,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text('Hata: $e')),
+                ],
+              ),
+              backgroundColor: Colors.red.shade600,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
+      }
+    }
+
+    emailController.dispose();
   }
 
   @override
@@ -488,7 +608,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               return null;
             },
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 12),
+
+          // Şifremi Unuttum
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _showForgotPasswordDialog,
+              child: Text(
+                'Şifremi Unuttum',
+                style: TextStyle(
+                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.9),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
 
           // Giriş butonu - Gradient
           _buildGradientButton(text: 'Giriş Yap', onPressed: _signInWithEmail),

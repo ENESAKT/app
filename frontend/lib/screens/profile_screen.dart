@@ -220,6 +220,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         ),
+        // Sadece kendi profilimizdeyse Ayarlar ikonu göster
+        actions: widget.isCurrentUser
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.settings, color: Colors.white),
+                  tooltip: 'Ayarlar',
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/settings');
+                  },
+                ),
+              ]
+            : null,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

@@ -9,11 +9,12 @@ import 'package:timeago/timeago.dart' as timeago;
 // Tema ve Konfigürasyon
 import 'config/app_theme.dart';
 
-import 'services/auth_provider.dart';
 import 'services/database_seeder.dart';
 import 'services/firebase_notification_service.dart';
+import 'features/splash/splash_view.dart'; // Splash Screen
 import 'screens/login_screen.dart';
-import 'screens/main_scaffold.dart'; // MainScaffold import
+import 'screens/main_scaffold.dart'; // Eski MainScaffold
+import 'features/home/main_scaffold_new.dart'; // Yeni Modern MainScaffold
 import 'screens/search_screen.dart';
 import 'screens/conversations_screen.dart';
 import 'screens/admin_panel_screen.dart';
@@ -27,6 +28,7 @@ import 'screens/profile_screen.dart';
 import 'features/wallpapers/screens/wallpapers_screen.dart';
 import 'features/weather/screens/weather_screen.dart';
 import 'features/news/screens/news_screen.dart';
+import 'features/settings/screens/settings_view.dart';
 
 /// Background message handler - Top-level function olmalı
 @pragma('vm:entry-point')
@@ -61,6 +63,7 @@ void main() async {
   // 5. Timeago Türkçe dil desteği
   timeago.setLocaleMessages('tr', timeago.TrMessages());
 
+  // Riverpod: ProviderScope uygulamanın tepesinde olmalı
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -97,7 +100,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Riverpod ile state management - ProviderScope main.dart'ta runApp'de
+    // Riverpod: ProviderScope main()'de zaten wrap edildi
     return MaterialApp(
       title: 'Arkadaşlık Uygulaması',
       debugShowCheckedModeBanner: false,
@@ -108,7 +111,7 @@ class MyApp extends StatelessWidget {
       theme: AppTheme.karanlikTema,
       darkTheme: AppTheme.karanlikTema,
       themeMode: ThemeMode.dark, // Her zaman karanlık mod
-      home: const AuthWrapper(),
+      home: const SplashView(), // Splash Screen ile başla
       onGenerateRoute: (settings) {
         // Profile route with dynamic userId argument
         if (settings.name == '/profile') {
@@ -128,7 +131,7 @@ class MyApp extends StatelessWidget {
         '/search': (context) => const SearchScreen(),
         '/friends': (context) => const FriendsScreen(),
         '/conversations': (context) => const ConversationsScreen(),
-        '/settings': (context) => const SettingsScreen(),
+        '/settings': (context) => const SettingsView(), // Yeni modern ayarlar
         '/admin': (context) => const AdminPanelScreen(),
         '/blocked': (context) => const BlockedUsersScreen(),
         '/seed': (context) =>
@@ -145,7 +148,7 @@ class MyApp extends StatelessWidget {
 
 /// Auth Gate - Supabase onAuthStateChange ile oturum kontrolü
 ///
-/// Oturum varsa MainScaffold'a yönlendirir (UpdateService otomatik init olur)
+/// Oturum varsa MainScaffoldNew'a yönlendirir (Yeni modern tasarım)
 /// Oturum yoksa LoginScreen'e yönlendirir
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
@@ -166,8 +169,8 @@ class AuthWrapper extends StatelessWidget {
         final session = snapshot.data?.session;
 
         if (session != null) {
-          // Oturum var -> MainScaffold (UpdateService burada init oluyor)
-          return const MainScaffold();
+          // Oturum var -> Yeni Modern MainScaffold
+          return const MainScaffoldNew();
         } else {
           // Oturum yok -> Giriş Ekranı
           return const LoginScreen();

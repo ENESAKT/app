@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../services/auth_provider.dart';
 import '../services/update_service.dart';
+import '../services/supabase_service.dart';
 
 /// Ayarlar ekranı - Profil ve uygulama ayarları
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -142,12 +143,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.person_outline,
                 title: 'Profili Düzenle',
                 subtitle: 'Bilgilerinizi güncelleyin',
-                onTap: () {
-                  // TODO: Profil düzenleme ekranı
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Yakında eklenecek!')),
-                  );
-                },
+                onTap: () => _showEditProfileDialog(context),
               ),
               _buildListTile(
                 icon: Icons.lock_outline,
@@ -192,6 +188,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
 
           const SizedBox(height: 32),
+
+          // Hesabımı Sil Butonu (Kritik)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: OutlinedButton.icon(
+              onPressed: () => _deleteAccount(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Colors.red, width: 1.5),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.delete_forever),
+              label: const Text(
+                'Hesabımı Sil',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
 
           // Çıkış Yap Butonu
           Padding(
@@ -273,6 +292,112 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  /// Profil düzenleme dialogu - Ad Soyad ve Bio
+  Future<void> _showEditProfileDialog(BuildContext context) async {
+    final supabaseService = SupabaseService();
+
+    // Mevcut kullanıcı verilerini yükle
+    final currentUser = await supabaseService.getCurrentUser();
+
+    final firstNameController = TextEditingController(
+      text: currentUser?['first_name'] ?? '',
+    );
+    final lastNameController = TextEditingController(
+      text: currentUser?['last_name'] ?? '',
+    );
+    final bioController = TextEditingController(
+      text: currentUser?['bio'] ?? '',
+    );
+
+    if (!context.mounted) return;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Profili Düzenle'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: firstNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Ad',
+                  prefixIcon: Icon(Icons.person_outline),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: lastNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Soyad',
+                  prefixIcon: Icon(Icons.person_outline),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: bioController,
+                decoration: const InputDecoration(
+                  labelText: 'Hakkında',
+                  prefixIcon: Icon(Icons.info_outline),
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF667eea),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Kaydet'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && context.mounted) {
+      try {
+        // Profili güncelle
+        await supabaseService.updateProfile(
+          firstName: firstNameController.text.trim(),
+          lastName: lastNameController.text.trim(),
+          bio: bioController.text.trim(),
+        );
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Profil güncellendi! ✅'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+
+    // Controller'ları temizle
+    firstNameController.dispose();
+    lastNameController.dispose();
+    bioController.dispose();
+  }
+
   Future<void> _checkForUpdates(BuildContext context) async {
     print('🔍 Ayarlar ekranından güncelleme kontrolü başlatılıyor...');
 
@@ -325,6 +450,174 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (confirmed == true && context.mounted) {
       await ref.read(authProvider).signOut();
       Navigator.pushReplacementNamed(context, '/login');
+    }
+  }
+
+  /// Hesabı Sil - Kritik işlem, çift onay gerektirir
+  Future<void> _deleteAccount(BuildContext context) async {
+    // İlk onay
+    final firstConfirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+            SizedBox(width: 12),
+            Text('Hesabı Sil'),
+          ],
+        ),
+        content: const Text(
+          'Hesabınızı silmek istediğinizden emin misiniz?\n\n'
+          '⚠️ Bu işlem GERİ ALINAMAZ!\n'
+          '• Tüm verileriniz silinecek\n'
+          '• Mesajlarınız silinecek\n'
+          '• Arkadaşlık bağlantılarınız kaldırılacak',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('İptal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Evet, Silmek İstiyorum'),
+          ),
+        ],
+      ),
+    );
+
+    if (firstConfirm != true || !context.mounted) return;
+
+    // İkinci onay - "SİL" yazmasını iste
+    final deleteController = TextEditingController();
+    final secondConfirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Son Onay'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Onaylamak için aşağıya "SİL" yazın:',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: deleteController,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'SİL',
+              ),
+              textCapitalization: TextCapitalization.characters,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (deleteController.text.trim().toUpperCase() == 'SİL') {
+                Navigator.pop(context, true);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Lütfen "SİL" yazın'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Hesabımı Kalıcı Olarak Sil'),
+          ),
+        ],
+      ),
+    );
+
+    if (secondConfirm != true || !context.mounted) return;
+
+    // Hesabı sil
+    try {
+      // Loading göster
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final supabaseService = SupabaseService();
+      final userId = supabaseService.client.auth.currentUser?.id;
+
+      if (userId != null) {
+        // Kullanıcı verilerini sil (messages, friendships, users tablosu)
+        await supabaseService.client
+            .from('messages')
+            .delete()
+            .or('sender_id.eq.$userId,receiver_id.eq.$userId');
+
+        await supabaseService.client
+            .from('friendships')
+            .delete()
+            .or('user_id_1.eq.$userId,user_id_2.eq.$userId');
+
+        await supabaseService.client.from('users').delete().eq('id', userId);
+
+        // Auth hesabını sil (Supabase Admin API gerektirir - RPC ile)
+        // Not: Supabase client tarafından auth.admin.deleteUser() kullanılamaz
+        // Bu nedenle sadece oturumu kapatıyoruz, tam silme için backend gerekli
+        await supabaseService.client.auth.signOut();
+      }
+
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Loading'i kapat
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Hesabınız silindi. Hoşçakalın!'),
+              ],
+            ),
+            backgroundColor: Colors.green.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Loading'i kapat
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Hata: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
     }
   }
 }

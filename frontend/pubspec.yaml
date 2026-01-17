@@ -1,7 +1,7 @@
 ﻿name: frontend
 description: "ArkadaÅŸlÄ±k UygulamasÄ± - Flutter Frontend"
 publish_to: 'none'
-version: 1.0.49+1
+version: 1.0.50+1
 
 environment:
   sdk: ^3.10.7
@@ -28,9 +28,8 @@ dependencies:
   # Image Picker (profil fotoÄŸrafÄ± iÃ§in)
   image_picker: ^1.1.2
   
-  # State Management (Riverpod + Provider)
+  # State Management
   flutter_riverpod: ^2.6.1
-
   
   # Modern Fontlar
   google_fonts: ^6.2.1
