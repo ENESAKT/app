@@ -1,14 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/app_theme.dart';
 import '../services/supabase_service.dart';
 
-/// Sohbet Detay Ekranı - Realtime mesajlaşma
+/// ═══════════════════════════════════════════════════════════════════════════
+/// SOHBET DETAY EKRANI - Dark Theme Realtime Mesajlaşma
+/// ═══════════════════════════════════════════════════════════════════════════
 ///
 /// Özellikler:
 /// - Supabase Realtime Stream ile anlık mesaj akışı
-/// - Bubble UI: Benim mesajlarım sağda (gradient), karşı tarafınki solda (gri)
-/// - Reverse ListView (klavye açıldığında otomatik scroll)
+/// - Bubble UI: Benim mesajlarım sağda (Mor-Turuncu Gradient)
+/// - Karşı tarafın mesajları solda (Koyu Gri #2C2C2C)
+/// - Dark theme arka plan (#121212)
+/// - Modern input area (emoji, attachment, gradient send button)
 /// - Okundu tikları
 class ChatDetailView extends StatefulWidget {
   final String otherUserId;
@@ -34,15 +39,11 @@ class _ChatDetailViewState extends State<ChatDetailView> {
   List<Map<String, dynamic>> _messages = [];
   StreamSubscription? _messagesSubscription;
   bool _isLoading = true;
-  String? _errorMessage; // Hata mesajı için
+  String? _errorMessage;
   String? _currentUserId;
 
-  // Tema renkleri
-  static const Color _primaryColor = Color(0xFF667eea);
-  static const Color _secondaryColor = Color(0xFF764ba2);
-  static const Color _myBubbleColor = Color(0xFF667eea);
-  static const Color _otherBubbleColor = Color(0xFFE8E8EE);
-  static const Color _backgroundColor = Color(0xFFF5F6FA);
+  // Dark theme renkleri
+  static const Color _otherBubbleColor = Color(0xFF2C2C2C);
 
   @override
   void initState() {
@@ -64,7 +65,7 @@ class _ChatDetailViewState extends State<ChatDetailView> {
 
     setState(() {
       _isLoading = true;
-      _errorMessage = null; // Önceki hatayı temizle
+      _errorMessage = null;
     });
 
     try {
@@ -123,7 +124,7 @@ class _ChatDetailViewState extends State<ChatDetailView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          0, // Reverse list olduğu için 0 en alta gider
+          0,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -160,14 +161,14 @@ class _ChatDetailViewState extends State<ChatDetailView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _backgroundColor,
+      backgroundColor: AppTheme.arkaplanKoyu,
       appBar: _buildAppBar(),
       body: Column(
         children: [
           Expanded(
             child: _isLoading
                 ? const Center(
-                    child: CircularProgressIndicator(color: _primaryColor),
+                    child: CircularProgressIndicator(color: AppTheme.morVurgu),
                   )
                 : _errorMessage != null
                 ? _buildErrorState()
@@ -183,27 +184,35 @@ class _ChatDetailViewState extends State<ChatDetailView> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: _primaryColor,
-      foregroundColor: Colors.white,
+      backgroundColor: AppTheme.arkaplanAcik,
+      foregroundColor: AppTheme.metinAna,
       elevation: 0,
-      leadingWidth: 30,
+      leadingWidth: 40,
       title: Row(
         children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundImage: widget.otherUserAvatar != null
-                ? NetworkImage(widget.otherUserAvatar!)
-                : null,
-            backgroundColor: Colors.white24,
-            child: widget.otherUserAvatar == null
-                ? Text(
-                    (widget.otherUserName ?? 'U')[0].toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  )
-                : null,
+          // Avatar with gradient border
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: AppTheme.anaGradient,
+            ),
+            padding: const EdgeInsets.all(2),
+            child: CircleAvatar(
+              radius: 20,
+              backgroundImage: widget.otherUserAvatar != null
+                  ? NetworkImage(widget.otherUserAvatar!)
+                  : null,
+              backgroundColor: AppTheme.kartArkaplani,
+              child: widget.otherUserAvatar == null
+                  ? Text(
+                      (widget.otherUserName ?? 'U')[0].toUpperCase(),
+                      style: const TextStyle(
+                        color: AppTheme.metinAna,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                  : null,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -215,15 +224,29 @@ class _ChatDetailViewState extends State<ChatDetailView> {
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
+                    color: AppTheme.metinAna,
                   ),
                 ),
-                const Text(
-                  'çevrimiçi',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.normal,
-                    color: Colors.white70,
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF4CAF50),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'çevrimiçi',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.normal,
+                        color: AppTheme.metinIkincil,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -231,12 +254,8 @@ class _ChatDetailViewState extends State<ChatDetailView> {
         ],
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.more_vert),
-          onPressed: () {
-            // TODO: Menu options
-          },
-        ),
+        IconButton(icon: const Icon(Icons.videocam_outlined), onPressed: () {}),
+        IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
       ],
     );
   }
@@ -244,11 +263,10 @@ class _ChatDetailViewState extends State<ChatDetailView> {
   Widget _buildMessageList() {
     return ListView.builder(
       controller: _scrollController,
-      reverse: true, // En son mesaj altta görünür
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      reverse: true,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: _messages.length,
       itemBuilder: (context, index) {
-        // Reverse list olduğu için indexi tersine çevir
         final reversedIndex = _messages.length - 1 - index;
         final message = _messages[reversedIndex];
         final isMe = message['sender_id'] == _currentUserId;
@@ -291,12 +309,12 @@ class _ChatDetailViewState extends State<ChatDetailView> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.08),
+          color: AppTheme.kartArkaplani,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
           text,
-          style: const TextStyle(fontSize: 12, color: Colors.black54),
+          style: const TextStyle(fontSize: 12, color: AppTheme.metinIkincil),
         ),
       ),
     );
@@ -314,27 +332,23 @@ class _ChatDetailViewState extends State<ChatDetailView> {
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
-        margin: const EdgeInsets.symmetric(vertical: 3),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          gradient: isMe
-              ? const LinearGradient(
-                  colors: [_primaryColor, _secondaryColor],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
+          gradient: isMe ? AppTheme.anaGradient : null,
           color: isMe ? null : _otherBubbleColor,
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: Radius.circular(isMe ? 18 : 4),
-            bottomRight: Radius.circular(isMe ? 4 : 18),
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: Radius.circular(isMe ? 20 : 6),
+            bottomRight: Radius.circular(isMe ? 6 : 20),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 6,
+              color: isMe
+                  ? AppTheme.morVurgu.withOpacity(0.2)
+                  : Colors.black.withOpacity(0.1),
+              blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
@@ -344,10 +358,7 @@ class _ChatDetailViewState extends State<ChatDetailView> {
           children: [
             Text(
               message['content'] ?? '',
-              style: TextStyle(
-                fontSize: 15,
-                color: isMe ? Colors.white : Colors.black87,
-              ),
+              style: const TextStyle(fontSize: 15, color: Colors.white),
             ),
             const SizedBox(height: 4),
             Row(
@@ -357,7 +368,9 @@ class _ChatDetailViewState extends State<ChatDetailView> {
                   timeStr,
                   style: TextStyle(
                     fontSize: 11,
-                    color: isMe ? Colors.white70 : Colors.black45,
+                    color: isMe
+                        ? Colors.white.withOpacity(0.7)
+                        : AppTheme.metinSoluk,
                   ),
                 ),
                 if (isMe) ...[
@@ -365,7 +378,9 @@ class _ChatDetailViewState extends State<ChatDetailView> {
                   Icon(
                     Icons.done_all,
                     size: 16,
-                    color: isRead ? Colors.lightBlueAccent : Colors.white60,
+                    color: isRead
+                        ? const Color(0xFF4FC3F7)
+                        : Colors.white.withOpacity(0.5),
                   ),
                 ],
               ],
@@ -396,12 +411,12 @@ class _ChatDetailViewState extends State<ChatDetailView> {
               ),
             ),
             const SizedBox(height: 20),
-            Text(
+            const Text(
               'Bağlantı Hatası',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[700],
+                color: AppTheme.metinAna,
               ),
             ),
             const SizedBox(height: 8),
@@ -411,19 +426,23 @@ class _ChatDetailViewState extends State<ChatDetailView> {
               style: TextStyle(fontSize: 14, color: Colors.red[400]),
             ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _initializeChat,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Tekrar Dene'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primaryColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+            Container(
+              decoration: BoxDecoration(
+                gradient: AppTheme.anaGradient,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: ElevatedButton.icon(
+                onPressed: _initializeChat,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Tekrar Dene'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  foregroundColor: Colors.white,
+                  shadowColor: Colors.transparent,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                 ),
               ),
             ),
@@ -441,28 +460,28 @@ class _ChatDetailViewState extends State<ChatDetailView> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: _primaryColor.withOpacity(0.1),
+              color: AppTheme.morVurgu.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.chat_bubble_outline,
               size: 60,
-              color: _primaryColor.withOpacity(0.5),
+              color: AppTheme.morVurgu.withOpacity(0.5),
             ),
           ),
           const SizedBox(height: 20),
-          Text(
+          const Text(
             'Henüz mesaj yok',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+              color: AppTheme.metinAna,
             ),
           ),
           const SizedBox(height: 8),
-          Text(
+          const Text(
             'Sohbete başlamak için bir mesaj gönderin',
-            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+            style: TextStyle(fontSize: 14, color: AppTheme.metinIkincil),
           ),
         ],
       ),
@@ -471,12 +490,12 @@ class _ChatDetailViewState extends State<ChatDetailView> {
 
   Widget _buildInputArea() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.arkaplanAcik,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(0.2),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -485,54 +504,90 @@ class _ChatDetailViewState extends State<ChatDetailView> {
       child: SafeArea(
         child: Row(
           children: [
-            // Emoji button
-            IconButton(
-              icon: Icon(
-                Icons.emoji_emotions_outlined,
-                color: Colors.grey[600],
+            // Attachment button
+            Container(
+              decoration: BoxDecoration(
+                color: AppTheme.kartArkaplani,
+                shape: BoxShape.circle,
               ),
-              onPressed: () {},
+              child: IconButton(
+                icon: const Icon(
+                  Icons.attach_file,
+                  color: AppTheme.metinIkincil,
+                ),
+                onPressed: () {
+                  // TODO: Dosya ekleme
+                },
+              ),
             ),
+
+            const SizedBox(width: 8),
 
             // Text field
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: _backgroundColor,
+                  color: AppTheme.kartArkaplani,
                   borderRadius: BorderRadius.circular(24),
-                ),
-                child: TextField(
-                  controller: _messageController,
-                  maxLines: 4,
-                  minLines: 1,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    hintText: 'Mesaj yazın...',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 12,
-                    ),
+                  border: Border.all(
+                    color: AppTheme.kenarRengi.withOpacity(0.3),
                   ),
-                  onSubmitted: (_) => _sendMessage(),
+                ),
+                child: Row(
+                  children: [
+                    // Emoji button
+                    IconButton(
+                      icon: const Icon(
+                        Icons.emoji_emotions_outlined,
+                        color: AppTheme.metinIkincil,
+                      ),
+                      onPressed: () {
+                        // TODO: Emoji picker
+                      },
+                    ),
+
+                    // TextField
+                    Expanded(
+                      child: TextField(
+                        controller: _messageController,
+                        style: const TextStyle(color: AppTheme.metinAna),
+                        maxLines: 4,
+                        minLines: 1,
+                        textCapitalization: TextCapitalization.sentences,
+                        decoration: const InputDecoration(
+                          hintText: 'Enter Text',
+                          hintStyle: TextStyle(color: AppTheme.metinSoluk),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 12,
+                          ),
+                        ),
+                        onSubmitted: (_) => _sendMessage(),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
 
             const SizedBox(width: 8),
 
-            // Send button
+            // Send button with gradient
             Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [_primaryColor, _secondaryColor],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+              decoration: BoxDecoration(
+                gradient: AppTheme.anaGradient,
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.morVurgu.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: IconButton(
-                icon: const Icon(Icons.send, color: Colors.white),
+                icon: const Icon(Icons.send_rounded, color: Colors.white),
                 onPressed: _sendMessage,
               ),
             ),

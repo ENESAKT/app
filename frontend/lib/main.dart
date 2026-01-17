@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:timeago/timeago.dart' as timeago;
+
+// Tema ve Konfigürasyon
+import 'config/app_theme.dart';
 
 import 'services/auth_provider.dart';
 import 'services/database_seeder.dart';
@@ -54,7 +58,10 @@ void main() async {
   // ⚠️ Production'da bu kodu kaldırın!
   await _seedDatabaseOnce();
 
-  runApp(const MyApp());
+  // 5. Timeago Türkçe dil desteği
+  timeago.setLocaleMessages('tr', timeago.TrMessages());
+
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 /// Veritabanını tek seferlik doldur (SharedPreferences ile kontrol)
@@ -90,68 +97,48 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthProvider(),
-      child: MaterialApp(
-        title: 'Arkadaşlık Uygulaması',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          primarySwatch: Colors.deepPurple,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF667eea),
-            brightness: Brightness.light,
-          ),
-          useMaterial3: true,
-          fontFamily: 'Roboto',
-          appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
-          cardTheme: CardThemeData(
-            elevation: 2,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              elevation: 2,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-          ),
-        ),
-        home: const AuthWrapper(),
-        onGenerateRoute: (settings) {
-          // Profile route with dynamic userId argument
-          if (settings.name == '/profile') {
-            final userId = settings.arguments as String?;
-            if (userId != null) {
-              return MaterialPageRoute(
-                builder: (context) => ProfileScreen(userId: userId),
-              );
-            }
+    // Riverpod ile state management - ProviderScope main.dart'ta runApp'de
+    return MaterialApp(
+      title: 'Arkadaşlık Uygulaması',
+      debugShowCheckedModeBanner: false,
+
+      // ═══════════════════════════════════════════════════════════════════
+      // KARANLIK TEMA - Modern ve şık görünüm
+      // ═══════════════════════════════════════════════════════════════════
+      theme: AppTheme.karanlikTema,
+      darkTheme: AppTheme.karanlikTema,
+      themeMode: ThemeMode.dark, // Her zaman karanlık mod
+      home: const AuthWrapper(),
+      onGenerateRoute: (settings) {
+        // Profile route with dynamic userId argument
+        if (settings.name == '/profile') {
+          final userId = settings.arguments as String?;
+          if (userId != null) {
+            return MaterialPageRoute(
+              builder: (context) => ProfileScreen(userId: userId),
+            );
           }
-          return null; // Let routes table handle it
-        },
-        routes: {
-          '/login': (context) => const LoginScreen(),
-          '/register': (context) => const RegistrationScreen(),
-          '/home': (context) => const MainScaffold(), // MainScaffold kullan
-          '/search': (context) => const SearchScreen(),
-          '/friends': (context) => const FriendsScreen(),
-          '/conversations': (context) => const ConversationsScreen(),
-          '/settings': (context) => const SettingsScreen(),
-          '/admin': (context) => const AdminPanelScreen(),
-          '/blocked': (context) => const BlockedUsersScreen(),
-          '/seed': (context) =>
-              const SeedDataScreen(), // DEV ONLY - Remove in production
-          // Super App Routes
-          '/apps-hub': (context) => const AppsHubScreen(),
-          '/wallpapers': (context) => const WallpapersScreen(),
-          '/weather': (context) => const WeatherScreen(),
-          '/news': (context) => const NewsScreen(),
-        },
-      ),
+        }
+        return null; // Let routes table handle it
+      },
+      routes: {
+        '/login': (context) => const LoginScreen(),
+        '/register': (context) => const RegistrationScreen(),
+        '/home': (context) => const MainScaffold(), // MainScaffold kullan
+        '/search': (context) => const SearchScreen(),
+        '/friends': (context) => const FriendsScreen(),
+        '/conversations': (context) => const ConversationsScreen(),
+        '/settings': (context) => const SettingsScreen(),
+        '/admin': (context) => const AdminPanelScreen(),
+        '/blocked': (context) => const BlockedUsersScreen(),
+        '/seed': (context) =>
+            const SeedDataScreen(), // DEV ONLY - Remove in production
+        // Super App Routes
+        '/apps-hub': (context) => const AppsHubScreen(),
+        '/wallpapers': (context) => const WallpapersScreen(),
+        '/weather': (context) => const WeatherScreen(),
+        '/news': (context) => const NewsScreen(),
+      },
     );
   }
 }

@@ -46,7 +46,7 @@ android {
         applicationId = "com.enes.vibe"
         
         // 🔥 TABLET İÇİN KRİTİK AYAR
-        minSdk = 21
+        minSdk = flutter.minSdkVersion
         
         targetSdk = 36
         versionCode = flutterVersionCode.toInt()
