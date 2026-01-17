@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart' as app_models;
+
+/// Global AuthProvider instance for Riverpod
+final authProvider = ChangeNotifierProvider<AuthProvider>(
+  (ref) => AuthProvider(),
+);
 
 /// Auth Provider - Supabase Native Authentication
 ///

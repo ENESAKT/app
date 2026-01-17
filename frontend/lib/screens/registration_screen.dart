@@ -1,19 +1,19 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/auth_provider.dart';
 
 /// Kayıt Ekranı - Premium Dark Theme + Glassmorphism
 /// Supabase Native Auth ile E-posta kayıt
-class RegistrationScreen extends StatefulWidget {
+class RegistrationScreen extends ConsumerStatefulWidget {
   const RegistrationScreen({super.key});
 
   @override
-  State<RegistrationScreen> createState() => _RegistrationScreenState();
+  ConsumerState<RegistrationScreen> createState() => _RegistrationScreenState();
 }
 
-class _RegistrationScreenState extends State<RegistrationScreen>
+class _RegistrationScreenState extends ConsumerState<RegistrationScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _firstNameController = TextEditingController();
@@ -82,7 +82,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final auth = ref.read(authProvider);
 
     print('🚀 Kayıt formu gönderiliyor...');
 
@@ -144,6 +144,8 @@ class _RegistrationScreenState extends State<RegistrationScreen>
 
   @override
   Widget build(BuildContext context) {
+    final auth = ref.watch(authProvider);
+
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0D),
       body: Stack(
@@ -181,10 +183,10 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                         const SizedBox(height: 24),
 
                         // Hata Mesajı
-                        _buildErrorMessage(),
+                        if (auth.error != null) _buildErrorMessage(auth.error!),
 
                         // Kayıt Butonu
-                        _buildRegisterButton(),
+                        _buildRegisterButton(auth.isLoading),
                         const SizedBox(height: 24),
 
                         // Giriş Yap Linki
@@ -555,97 +557,79 @@ class _RegistrationScreenState extends State<RegistrationScreen>
   }
 
   /// Hata Mesajı
-  Widget _buildErrorMessage() {
-    return Consumer<AuthProvider>(
-      builder: (context, auth, _) {
-        if (auth.error != null) {
-          return Container(
-            padding: const EdgeInsets.all(14),
-            margin: const EdgeInsets.only(bottom: 20),
-            decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.red.withOpacity(0.25)),
+  Widget _buildErrorMessage(String error) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.red.withOpacity(0.25)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.redAccent, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              error,
+              style: const TextStyle(color: Colors.redAccent, fontSize: 13),
             ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.error_outline,
-                  color: Colors.redAccent,
-                  size: 22,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    auth.error!,
-                    style: const TextStyle(
-                      color: Colors.redAccent,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-        return const SizedBox.shrink();
-      },
+          ),
+        ],
+      ),
     );
   }
 
   /// Kayıt Butonu - Gradient
-  Widget _buildRegisterButton() {
-    return Consumer<AuthProvider>(
-      builder: (context, auth, _) {
-        return Container(
-          width: double.infinity,
-          height: 56,
-          decoration: BoxDecoration(
+  Widget _buildRegisterButton(bool isLoading) {
+    return Container(
+      width: double.infinity,
+      height: 56,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [Color(0xFF8B5CF6), Color(0xFFF97316)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF8B5CF6).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: isLoading ? null : _register,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          disabledBackgroundColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            gradient: const LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [Color(0xFF8B5CF6), Color(0xFFF97316)],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF8B5CF6).withOpacity(0.4),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
           ),
-          child: ElevatedButton(
-            onPressed: auth.isLoading ? null : _register,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              disabledBackgroundColor: Colors.transparent,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+        ),
+        child: isLoading
+            ? const SizedBox(
+                height: 24,
+                width: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
+            : const Text(
+                'Kayıt Ol',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
               ),
-            ),
-            child: auth.isLoading
-                ? const SizedBox(
-                    height: 24,
-                    width: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text(
-                    'Kayıt Ol',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-          ),
-        );
-      },
+      ),
     );
   }
 

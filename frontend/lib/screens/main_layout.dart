@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/auth_provider.dart';
 import '../services/update_service.dart';
 import 'home_screen.dart';
@@ -7,18 +7,17 @@ import 'search_screen.dart';
 import 'conversations_screen.dart';
 import 'friends_screen.dart';
 import 'profile_screen.dart';
-import 'settings_screen.dart';
 
 /// Ana Layout - 5 Sekmeli Bottom Navigation
 /// Instagram/TikTok tarzı modern sosyal medya navigasyonu
-class MainLayout extends StatefulWidget {
+class MainLayout extends ConsumerStatefulWidget {
   const MainLayout({super.key});
 
   @override
-  State<MainLayout> createState() => _MainLayoutState();
+  ConsumerState<MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends State<MainLayout> {
+class _MainLayoutState extends ConsumerState<MainLayout> {
   int _currentIndex = 0;
   final UpdateService _updateService = UpdateService();
 
@@ -47,7 +46,7 @@ class _MainLayoutState extends State<MainLayout> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context);
+    final auth = ref.watch(authProvider);
 
     return Scaffold(
       // Drawer (Yan Menü)
@@ -351,12 +350,12 @@ class _AddPostPlaceholder extends StatelessWidget {
 }
 
 /// Profil Sayfası Wrapper
-class _ProfilePage extends StatelessWidget {
+class _ProfilePage extends ConsumerWidget {
   const _ProfilePage();
 
   @override
-  Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authProvider);
     final userId = auth.userId; // Supabase UUID
 
     if (userId == null) {

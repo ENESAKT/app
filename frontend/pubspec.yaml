@@ -1,7 +1,7 @@
 ﻿name: frontend
 description: "ArkadaÅŸlÄ±k UygulamasÄ± - Flutter Frontend"
 publish_to: 'none'
-version: 1.0.48+1
+version: 1.0.49+1
 
 environment:
   sdk: ^3.10.7
@@ -30,7 +30,7 @@ dependencies:
   
   # State Management (Riverpod + Provider)
   flutter_riverpod: ^2.6.1
-  provider: ^6.1.0
+
   
   # Modern Fontlar
   google_fonts: ^6.2.1

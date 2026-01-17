@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../config/app_theme.dart';
@@ -18,14 +18,14 @@ import 'chat_detail_view.dart';
 /// - Start Chat FAB butonu
 /// - Dark theme (#121212 arka plan)
 /// - Mor-Turuncu gradient vurgular
-class ChatListView extends StatefulWidget {
+class ChatListView extends ConsumerStatefulWidget {
   const ChatListView({super.key});
 
   @override
-  State<ChatListView> createState() => _ChatListViewState();
+  ConsumerState<ChatListView> createState() => _ChatListViewState();
 }
 
-class _ChatListViewState extends State<ChatListView> {
+class _ChatListViewState extends ConsumerState<ChatListView> {
   final SupabaseService _supabaseService = SupabaseService();
   final TextEditingController _searchController = TextEditingController();
 
@@ -46,7 +46,7 @@ class _ChatListViewState extends State<ChatListView> {
     // Türkçe timeago ayarı
     timeago.setLocaleMessages('tr', timeago.TrMessages());
 
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final auth = ref.read(authProvider);
     _currentUserId = auth.userId;
 
     if (_currentUserId != null) {
@@ -807,19 +807,7 @@ class _UserSelectionModalState extends State<_UserSelectionModal> {
         username,
         style: const TextStyle(
           color: AppTheme.metinAna,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      trailing: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: AppTheme.morVurgu.withOpacity(0.1),
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(
-          Icons.chat_bubble_outline,
-          color: AppTheme.morVurgu,
-          size: 20,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );

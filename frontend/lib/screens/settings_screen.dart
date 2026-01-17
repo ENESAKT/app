@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../services/auth_provider.dart';
 import '../services/update_service.dart';
 
 /// Ayarlar ekranı - Profil ve uygulama ayarları
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // Dinamik versiyon bilgisi
   String _version = '...';
   String _buildNumber = '...';
@@ -51,7 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context);
+    final auth = ref.watch(authProvider);
     final user = auth.currentUser;
 
     return Scaffold(
@@ -197,7 +197,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: ElevatedButton.icon(
-              onPressed: () => _logout(context, auth),
+              onPressed: () => _logout(context),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
@@ -302,7 +302,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await UpdateService().checkForUpdate(context: context, manual: true);
   }
 
-  void _logout(BuildContext context, AuthProvider auth) async {
+  void _logout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -323,7 +323,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (confirmed == true && context.mounted) {
-      await auth.signOut();
+      await ref.read(authProvider).signOut();
       Navigator.pushReplacementNamed(context, '/login');
     }
   }

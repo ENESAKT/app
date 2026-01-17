@@ -1,17 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/auth_provider.dart';
 
 /// E-posta Doğrulama Ekranı
-class EmailVerificationScreen extends StatefulWidget {
+class EmailVerificationScreen extends ConsumerStatefulWidget {
   const EmailVerificationScreen({super.key});
 
   @override
-  State<EmailVerificationScreen> createState() => _EmailVerificationScreenState();
+  ConsumerState<EmailVerificationScreen> createState() =>
+      _EmailVerificationScreenState();
 }
 
-class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
+class _EmailVerificationScreenState
+    extends ConsumerState<EmailVerificationScreen> {
   Timer? _timer;
   bool _canResend = true;
   int _resendCooldown = 0;
@@ -32,9 +34,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   }
 
   Future<void> _checkVerification() async {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final auth = ref.read(authProvider);
     final verified = await auth.checkEmailVerification();
-    
+
     if (verified && mounted) {
       _timer?.cancel();
       Navigator.pushReplacementNamed(context, '/home');
@@ -43,15 +45,15 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
   Future<void> _resendEmail() async {
     if (!_canResend) return;
-    
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+
+    final auth = ref.read(authProvider);
     await auth.resendVerificationEmail();
-    
+
     setState(() {
       _canResend = false;
       _resendCooldown = 60;
     });
-    
+
     // 60 saniye bekleme süresi
     Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_resendCooldown > 0) {
@@ -61,7 +63,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         setState(() => _canResend = true);
       }
     });
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -74,7 +76,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context);
+    final auth = ref.watch(authProvider);
     final email = auth.firebaseUser?.email ?? '';
 
     return Scaffold(
@@ -83,10 +85,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF667eea),
-              Color(0xFF764ba2),
-            ],
+            colors: [Color(0xFF667eea), Color(0xFF764ba2)],
           ),
         ),
         child: SafeArea(
@@ -109,7 +108,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                
+
                 // Başlık
                 const Text(
                   'E-postanızı Doğrulayın',
@@ -120,7 +119,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Açıklama
                 Text(
                   'Doğrulama linki şu adrese gönderildi:',
@@ -141,7 +140,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                
+
                 // Bekleme göstergesi
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -172,7 +171,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                
+
                 // Talimatlar
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -196,31 +195,37 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                       const SizedBox(height: 8),
                       _buildInstruction('2', 'Doğrulama linkine tıklayın'),
                       const SizedBox(height: 8),
-                      _buildInstruction('3', 'Buraya otomatik yönlendirileceksiniz'),
+                      _buildInstruction(
+                        '3',
+                        'Buraya otomatik yönlendirileceksiniz',
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 32),
-                
+
                 // Tekrar gönder butonu
                 TextButton.icon(
                   onPressed: _canResend ? _resendEmail : null,
                   icon: const Icon(Icons.refresh, color: Colors.white),
                   label: Text(
-                    _canResend 
-                        ? 'E-postayı Tekrar Gönder' 
+                    _canResend
+                        ? 'E-postayı Tekrar Gönder'
                         : 'Tekrar gönder ($_resendCooldown sn)',
                     style: const TextStyle(color: Colors.white),
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Manuel doğrulama butonu
                 OutlinedButton(
                   onPressed: _checkVerification,
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Colors.white),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
                   ),
                   child: const Text(
                     'Doğruladım, Kontrol Et',
@@ -228,11 +233,11 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                
+
                 // Geri dön
                 TextButton(
                   onPressed: () async {
-                    final auth = Provider.of<AuthProvider>(context, listen: false);
+                    final auth = ref.read(authProvider);
                     await auth.signOut();
                     if (mounted) {
                       Navigator.pushReplacementNamed(context, '/login');
@@ -278,10 +283,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         const SizedBox(width: 12),
         Text(
           text,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.8),
-            fontSize: 14,
-          ),
+          style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14),
         ),
       ],
     );

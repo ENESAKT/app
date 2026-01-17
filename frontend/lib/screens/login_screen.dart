@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/auth_provider.dart';
 
 /// Login Ekranı - Premium Dark Theme + Glassmorphism
 /// Supabase Native Auth ile Google OAuth ve E-posta giriş
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
+class _LoginScreenState extends ConsumerState<LoginScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
@@ -54,14 +54,14 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _signInWithGoogle() async {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final auth = ref.read(authProvider);
     await auth.signInWithGoogle();
   }
 
   Future<void> _signInWithEmail() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final auth = ref.read(authProvider);
     final success = await auth.signInWithEmail(
       _emailController.text.trim(),
       _passwordController.text,
@@ -74,6 +74,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
+    final auth = ref.watch(authProvider);
+
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0D),
       body: Stack(
@@ -98,38 +100,33 @@ class _LoginScreenState extends State<LoginScreen>
                         const SizedBox(height: 48),
 
                         // Auth İçeriği
-                        Consumer<AuthProvider>(
-                          builder: (context, auth, _) {
-                            if (auth.isLoading) {
-                              return _buildLoadingState();
-                            }
+                        if (auth.isLoading)
+                          _buildLoadingState()
+                        else
+                          Column(
+                            children: [
+                              // Hata mesajı
+                              if (auth.error != null)
+                                _buildErrorCard(auth.error!),
 
-                            return Column(
-                              children: [
-                                // Hata mesajı
-                                if (auth.error != null)
-                                  _buildErrorCard(auth.error!),
-
-                                // Google ile Giriş veya E-posta Giriş
-                                if (!_showEmailLogin) ...[
-                                  _buildGoogleButton(auth),
-                                  const SizedBox(height: 20),
-                                  _buildDivider(),
-                                  const SizedBox(height: 20),
-                                  _buildEmailToggleButton(),
-                                ],
-
-                                // E-posta Giriş Formu
-                                if (_showEmailLogin) _buildEmailForm(),
-
-                                const SizedBox(height: 32),
-
-                                // Kayıt ol linki
-                                _buildRegisterLink(),
+                              // Google ile Giriş veya E-posta Giriş
+                              if (!_showEmailLogin) ...[
+                                _buildGoogleButton(auth),
+                                const SizedBox(height: 20),
+                                _buildDivider(),
+                                const SizedBox(height: 20),
+                                _buildEmailToggleButton(),
                               ],
-                            );
-                          },
-                        ),
+
+                              // E-posta Giriş Formu
+                              if (_showEmailLogin) _buildEmailForm(),
+
+                              const SizedBox(height: 32),
+
+                              // Kayıt ol linki
+                              _buildRegisterLink(),
+                            ],
+                          ),
                       ],
                     ),
                   ),

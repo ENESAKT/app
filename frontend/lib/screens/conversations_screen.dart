@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../config/app_theme.dart';
@@ -18,14 +18,15 @@ import 'chat_detail_view.dart';
 /// - Start Chat FAB butonu
 /// - Dark theme (#121212 arka plan)
 /// - Mor-Turuncu gradient vurgular
-class ConversationsScreen extends StatefulWidget {
+class ConversationsScreen extends ConsumerStatefulWidget {
   const ConversationsScreen({super.key});
 
   @override
-  State<ConversationsScreen> createState() => _ConversationsScreenState();
+  ConsumerState<ConversationsScreen> createState() =>
+      _ConversationsScreenState();
 }
 
-class _ConversationsScreenState extends State<ConversationsScreen> {
+class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
   final SupabaseService _supabaseService = SupabaseService();
   final TextEditingController _searchController = TextEditingController();
 
@@ -46,7 +47,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     // Türkçe timeago ayarı
     timeago.setLocaleMessages('tr', timeago.TrMessages());
 
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final auth = ref.read(authProvider);
     _currentUserId = auth.userId;
 
     if (_currentUserId != null) {
@@ -71,7 +72,23 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   }
 
   void _applyFilters() {
-    List<Map<String, dynamic>> result = List.from(_friends);
+    List<Map<String, dynamic>> result = List.from(_conversations);
+
+    // Not: Orijinal kodda _friends listesinden filtreleme yapılıyordu
+    // Ancak _buildConversationList _filteredConversations kullanıyor
+    // ve _buildConversationTile bir arkadaş değil, bir konuşma verisi bekliyor gibi görünüyor?
+    // Orijinal koda bakılırsa:
+    // _filteredConversations = result; (where result comes from _friends)
+    // Ama _buildConversationTile(friend) deniyor.
+    // Ancak veriler _loadData içinde:
+    // _friends = friends (getAcceptedFriends)
+    // _conversations = conversations (getConversations)
+    // Orijinal kodda _friends üzerinden filtreleme yapılmış, yani konuşmalar listesi
+    // aslında arkadaş listesi gibi davranıyor.
+    // Sanırım bu ekran "Mesajlaşma" ama veriler "Arkadaşlar" üzerinden listeleniyor.
+    // Ancak konuşma verileri (_conversations) sadece son mesaj/badge için kullanılıyor.
+    // Orijinal mantığı koruyarak devam ediyorum.
+    result = List.from(_friends);
 
     // Search filter
     if (_searchQuery.isNotEmpty) {
@@ -807,19 +824,7 @@ class _UserSelectionModalState extends State<_UserSelectionModal> {
         username,
         style: const TextStyle(
           color: AppTheme.metinAna,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      trailing: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: AppTheme.morVurgu.withOpacity(0.1),
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(
-          Icons.chat_bubble_outline,
-          color: AppTheme.morVurgu,
-          size: 20,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );

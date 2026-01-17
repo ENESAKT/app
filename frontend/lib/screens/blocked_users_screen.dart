@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_provider.dart';
 
 /// Engellenmiş Kullanıcılar Ekranı - Supabase Native
-class BlockedUsersScreen extends StatefulWidget {
+class BlockedUsersScreen extends ConsumerStatefulWidget {
   const BlockedUsersScreen({super.key});
 
   @override
-  State<BlockedUsersScreen> createState() => _BlockedUsersScreenState();
+  ConsumerState<BlockedUsersScreen> createState() => _BlockedUsersScreenState();
 }
 
-class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
+class _BlockedUsersScreenState extends ConsumerState<BlockedUsersScreen> {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   List<Map<String, dynamic>> _blockedUsers = [];
@@ -27,7 +27,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
   Future<void> _loadBlockedUsers() async {
     setState(() => _isLoading = true);
 
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final auth = ref.read(authProvider);
     final currentUserId = auth.userId;
 
     if (currentUserId == null) {

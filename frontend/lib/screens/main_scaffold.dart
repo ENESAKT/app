@@ -1,13 +1,13 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/auth_provider.dart';
 import '../services/update_service.dart';
 import '../services/notification_service.dart';
 import '../features/home/screens/home_screen.dart';
 import '../features/reels/screens/reels_screen.dart';
-import 'explore_screen.dart';
+
 import 'create_post_screen.dart';
 import 'profile_screen.dart';
 import 'conversations_screen.dart';
@@ -20,14 +20,14 @@ import 'conversations_screen.dart';
 /// - Gradient aktif ikonlar (Mor-Turuncu)
 /// - NotificationService realtime dinleme
 /// - UpdateService güncelleme kontrolü
-class MainScaffold extends StatefulWidget {
+class MainScaffold extends ConsumerStatefulWidget {
   const MainScaffold({super.key});
 
   @override
-  State<MainScaffold> createState() => _MainScaffoldState();
+  ConsumerState<MainScaffold> createState() => _MainScaffoldState();
 }
 
-class _MainScaffoldState extends State<MainScaffold>
+class _MainScaffoldState extends ConsumerState<MainScaffold>
     with TickerProviderStateMixin {
   int _currentIndex = 0;
   final UpdateService _updateService = UpdateService();
@@ -64,7 +64,7 @@ class _MainScaffoldState extends State<MainScaffold>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateService.init(context);
 
-      final userId = Provider.of<AuthProvider>(context, listen: false).userId;
+      final userId = ref.read(authProvider).userId;
       if (userId != null) {
         _notificationService.startListening(userId);
       }
@@ -332,12 +332,12 @@ class AnimatedBuilder2 extends AnimatedWidget {
 }
 
 /// Profile Wrapper - Current user profili
-class _ProfileWrapper extends StatelessWidget {
+class _ProfileWrapper extends ConsumerWidget {
   const _ProfileWrapper();
 
   @override
-  Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authProvider);
     final userId = auth.userId;
 
     if (userId == null) {

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/auth_provider.dart';
 import '../services/friendship_service.dart';
@@ -7,14 +7,14 @@ import 'chat_screen.dart';
 
 /// Kullanıcı Arama & Keşfet Ekranı
 /// Modern, Instagram-style UI
-class SearchScreen extends StatefulWidget {
+class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
   @override
-  State<SearchScreen> createState() => _SearchScreenState();
+  ConsumerState<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
+class _SearchScreenState extends ConsumerState<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FriendshipService _friendshipService = FriendshipService();
 
@@ -40,7 +40,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
     setState(() => _isSearching = true);
 
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final auth = ref.read(authProvider);
     final currentUserId = auth.userId; // Supabase UUID
 
     if (currentUserId == null) return;
@@ -82,7 +82,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _sendFriendRequest(String userId) async {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final auth = ref.read(authProvider);
     final currentUserId = auth.userId; // Supabase UUID
     if (currentUserId == null) return;
 

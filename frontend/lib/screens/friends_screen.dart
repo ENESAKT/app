@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/auth_provider.dart';
 import '../services/friendship_service.dart';
@@ -8,14 +8,14 @@ import 'chat_screen.dart';
 /// Arkadaşlık Yönetimi Ekranı
 /// - Gelen İstekler (üstte vurgu ile)
 /// - Arkadaşlarım Listesi
-class FriendsScreen extends StatefulWidget {
+class FriendsScreen extends ConsumerStatefulWidget {
   const FriendsScreen({super.key});
 
   @override
-  State<FriendsScreen> createState() => _FriendsScreenState();
+  ConsumerState<FriendsScreen> createState() => _FriendsScreenState();
 }
 
-class _FriendsScreenState extends State<FriendsScreen>
+class _FriendsScreenState extends ConsumerState<FriendsScreen>
     with SingleTickerProviderStateMixin {
   final FriendshipService _friendshipService = FriendshipService();
 
@@ -41,7 +41,7 @@ class _FriendsScreenState extends State<FriendsScreen>
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
 
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final auth = ref.read(authProvider);
     final userId = auth.userId; // Supabase UUID
 
     if (userId == null) {
