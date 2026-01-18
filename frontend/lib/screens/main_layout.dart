@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/auth_provider.dart';
 import '../services/update_service.dart';
+import '../providers/settings_provider.dart';
 import 'home_screen.dart';
 import 'search_screen.dart';
 import 'conversations_screen.dart';
@@ -264,12 +265,27 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
 
           const Spacer(),
 
-          // Footer
+          // Footer - Dinamik Versiyon
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Text(
-              'v1.0.0 • Made with 💜',
-              style: TextStyle(color: Colors.grey[400], fontSize: 12),
+            child: Consumer(
+              builder: (context, ref, child) {
+                final version = ref.watch(appVersionProvider);
+                return version.when(
+                  data: (v) => Text(
+                    '${v.short} • Made with 💜',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                  ),
+                  loading: () => Text(
+                    'v... • Made with 💜',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                  ),
+                  error: (_, __) => Text(
+                    'v1.0.0 • Made with 💜',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                  ),
+                );
+              },
             ),
           ),
         ],
