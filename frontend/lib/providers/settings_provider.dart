@@ -139,3 +139,10 @@ final cacheNotifierProvider = StateNotifierProvider<CacheNotifier, CacheState>((
 ) {
   return CacheNotifier();
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// DEBUG LOG AYARI
+// ══════════════════════════════════════════════════════════════════════════
+
+/// Debug log açık/kapalı durumu
+final debugLogProvider = StateProvider<bool>((ref) => false);

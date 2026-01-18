@@ -95,6 +95,40 @@ class DeveloperSettingsScreen extends ConsumerWidget {
           const SizedBox(height: 32),
 
           // ═══════════════════════════════════════════════════════════════
+          // DEBUG LOG AYARI
+          // ═══════════════════════════════════════════════════════════════
+          _buildSectionTitle('Geliştirici'),
+          const SizedBox(height: 12),
+
+          _buildSwitchTile(
+            context: context,
+            ref: ref,
+            icon: Icons.bug_report_outlined,
+            title: 'Debug Log',
+            subtitle: 'Konsol çıktılarını göster',
+            value: ref.watch(debugLogProvider),
+            onChanged: (val) {
+              ref.read(debugLogProvider.notifier).state = val;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    val ? 'Debug log açıldı 🐛' : 'Debug log kapatıldı',
+                  ),
+                  backgroundColor: val
+                      ? Colors.green.shade600
+                      : Colors.grey.shade600,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              );
+            },
+          ),
+
+          const SizedBox(height: 32),
+
+          // ═══════════════════════════════════════════════════════════════
           // ADMİN PANELİ (Sadece adminler görsün)
           // ═══════════════════════════════════════════════════════════════
           isAdmin.when(
@@ -377,6 +411,77 @@ class DeveloperSettingsScreen extends ConsumerWidget {
               fontSize: 11,
               fontFamily: 'monospace',
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Switch tile - Toggle ayarları için
+  Widget _buildSwitchTile({
+    required BuildContext context,
+    required WidgetRef ref,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: value
+                  ? AppTheme.morVurgu.withValues(alpha: 0.3)
+                  : Colors.grey.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              color: value ? AppTheme.morVurgu : Colors.grey,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: AppTheme.morVurgu,
+            activeTrackColor: AppTheme.morVurgu.withValues(alpha: 0.3),
+            inactiveTrackColor: Colors.grey.withValues(alpha: 0.3),
+            inactiveThumbColor: Colors.grey,
           ),
         ],
       ),
